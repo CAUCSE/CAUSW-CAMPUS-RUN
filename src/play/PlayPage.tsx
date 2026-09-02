@@ -5,18 +5,11 @@ import { KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { completeGameSession } from '../shared/api'
 import { formatDuration } from '../shared/format'
 import { clearActiveGame, readActiveGame } from '../shared/game-session'
-import type { CompleteSessionRequest, CompletionResponse } from '../shared/types'
+import type { CompleteSessionRequest } from '../shared/types'
 import { applyCharacter, createGameState, deleteCharacter, isCourseComplete } from './game-state'
 import styles from './PlayPage.module.css'
 
 const LAST_RESULT_KEY = 'cau-typing-last-result'
-
-type LastResult = {
-  // The completion response remains intact here because the result page needs
-  // its official score, nullable rank, and registration status.
-  entry: CompletionResponse
-  leaderboard: CompletionResponse['leaderboard']
-}
 
 export function PlayPage() {
   const [activeGame] = useState(() => readActiveGame())
@@ -54,8 +47,7 @@ export function PlayPage() {
     setSaveError(false)
     try {
       const response = await completeGameSession(game.sessionId, payload)
-      const result: LastResult = { entry: response, leaderboard: response.leaderboard }
-      sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(result))
+      sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(response))
       clearActiveGame()
       window.location.assign('/result.html')
     } catch {

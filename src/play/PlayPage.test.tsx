@@ -94,10 +94,7 @@ describe('PlayPage', () => {
       typoCount: 0,
     })
     await act(async () => {})
-    expect(JSON.parse(sessionStorage.getItem('cau-typing-last-result')!)).toEqual({
-      entry: completion,
-      leaderboard: completion.leaderboard,
-    })
+    expect(JSON.parse(sessionStorage.getItem('cau-typing-last-result')!)).toEqual(completion)
     expect(mocks.clearActiveGame).toHaveBeenCalledOnce()
     expect(assign).toHaveBeenCalledWith('/result.html')
   })
