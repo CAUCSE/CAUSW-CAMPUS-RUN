@@ -76,7 +76,7 @@ export function PlayPage() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (isComplete || isExpired || isSaving) return
+    if (isComplete || isExpired || Date.now() >= game.expiresAtEpochMs || isSaving) return
 
     let nextState = gameState
     if (event.key === 'Backspace') {

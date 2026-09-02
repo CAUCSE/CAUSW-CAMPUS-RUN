@@ -126,6 +126,20 @@ describe('PlayPage', () => {
     })
   })
 
+  test('does not accept a key pressed at expiry before the timer rerenders', () => {
+    render(<PlayPage />)
+    const input = screen.getByLabelText('장소 입력')
+
+    // Change the wall clock without advancing the interval: this reproduces
+    // the interval/render boundary where the previously-rendered state is stale.
+    vi.setSystemTime(activeGame.expiresAtEpochMs)
+    fireEvent.keyDown(input, { key: '본' })
+
+    expect(input).toHaveValue('')
+    expect(screen.getByText('1 / 2')).toBeInTheDocument()
+    expect(mocks.completeGameSession).not.toHaveBeenCalled()
+  })
+
   test('blocks paste input', () => {
     render(<PlayPage />)
     const event = fireEvent.paste(screen.getByLabelText('장소 입력'), { clipboardData: { getData: () => '본관' } })
