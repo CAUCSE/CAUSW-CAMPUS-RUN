@@ -20,10 +20,12 @@ export type LeaderboardEntry = {
 }
 
 export type CompletionResponse = {
-  entry: LeaderboardEntry & {
-    rankingStatus: 'ELIGIBLE' | 'PENDING_REGISTRATION'
-    rank: number | null
-  }
+  recordId: string
+  nickname: string
+  officialElapsedMilliseconds: number
+  typoCount: number
+  rankingStatus: 'ELIGIBLE' | 'PENDING_REGISTRATION'
+  rank: number | null
   leaderboard: LeaderboardEntry[]
 }
 

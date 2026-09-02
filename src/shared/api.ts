@@ -8,6 +8,10 @@ import type {
 
 const NETWORK_ERROR_MESSAGE = '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
 const MALFORMED_RESPONSE_MESSAGE = '서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+const CAMPUS_COURSE = new Set([
+  '영신관', '파이퍼홀', '수림과학관', '학생회관', '본관', '전산정보관', '서라벌홀', '중앙도서관', '봅스트홀',
+  '제2공학관', '창업보육관', '중앙문화예술관', '대학원', '법학관', '미디어공연영상관', '글로벌하우스', '블루미르홀', '100주년기념관',
+])
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -81,25 +85,26 @@ function isCreateSessionResponse(value: unknown): value is CreateSessionResponse
   return isRecord(value)
     && typeof value.sessionId === 'string'
     && Array.isArray(value.course)
-    && value.course.length === 18
-    && value.course.every((place) => typeof place === 'string')
+    && isCampusCourse(value.course)
     && typeof value.startedAt === 'string'
     && typeof value.expiresAt === 'string'
 }
 
 function isCompletionResponse(value: unknown): value is CompletionResponse {
   return isRecord(value)
-    && isCompletionEntry(value.entry)
-    && isLeaderboard(value.leaderboard)
-}
-
-function isCompletionEntry(value: unknown): value is CompletionResponse['entry'] {
-  return isRecord(value)
+    && typeof value.recordId === 'string'
     && typeof value.nickname === 'string'
     && typeof value.officialElapsedMilliseconds === 'number'
     && typeof value.typoCount === 'number'
     && (value.rankingStatus === 'ELIGIBLE' || value.rankingStatus === 'PENDING_REGISTRATION')
     && (typeof value.rank === 'number' || value.rank === null)
+    && isLeaderboard(value.leaderboard)
+}
+
+function isCampusCourse(value: unknown[]): value is string[] {
+  return value.length === CAMPUS_COURSE.size
+    && value.every((place) => typeof place === 'string' && CAMPUS_COURSE.has(place))
+    && new Set(value).size === CAMPUS_COURSE.size
 }
 
 function isLeaderboard(value: unknown): value is LeaderboardEntry[] {
