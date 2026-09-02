@@ -1,0 +1,29 @@
+.page { min-height: 100vh; box-sizing: border-box; padding: clamp(24px, 4vw, 64px); color: #fff; background: #101828; font-family: inherit; }
+.header { display: flex; align-items: center; gap: 18px; min-height: 34px; margin: 0 auto clamp(34px, 6vh, 72px); max-width: 1440px; }
+.logo { width: 224px; height: 34px; object-fit: contain; }
+.headerDivider { width: 1px; height: 24px; background: #364153; }
+.wordmark, .eyebrow { letter-spacing: .12em; font-weight: 700; }
+.wordmark { color: #99a1af; font-size: 14px; }
+.content { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(360px, .98fr); gap: clamp(24px, 3vw, 48px); max-width: 1280px; margin: 0 auto; align-items: stretch; }
+.startCard, .leaderboard { box-sizing: border-box; border: 1px solid #364153; border-radius: 20px; background: #1e2939; box-shadow: 0 24px 80px rgb(0 0 0 / 20%); }
+.startCard { padding: clamp(28px, 4vw, 52px); }
+.introduction { display: flex; align-items: flex-start; gap: 18px; margin-bottom: 36px; }
+.eyebrow { margin: 0 0 8px; color: #4f98ff; font-size: 12px; }
+h1, h2 { margin: 0; color: #fff; font-weight: 750; letter-spacing: -.03em; }
+h1 { font-size: clamp(30px, 3vw, 44px); line-height: 1.15; }
+h2 { font-size: 32px; }
+.introduction p:last-child { margin: 12px 0 0; color: #99a1af; font-size: 16px; line-height: 1.6; }
+.form { display: grid; gap: 20px; }
+.startButton { min-height: 64px; margin-top: 8px; font-size: 22px; font-weight: 700; }
+.submitError, .leaderboardError { margin: 0; color: #fd5c5f; font-size: 15px; }
+.leaderboard { padding: clamp(28px, 3vw, 44px); overflow: hidden; }
+.leaderboardHeading { display: flex; align-items: end; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid #364153; }
+.leaderboard table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.leaderboard th { padding: 15px 8px 11px; color: #99a1af; font-size: 13px; text-align: right; font-weight: 600; }
+.leaderboard th:nth-child(2), .leaderboard td:nth-child(2) { text-align: left; }
+.leaderboard td { padding: 14px 8px; border-top: 1px solid rgb(54 65 83 / 72%); color: #fff; text-align: right; font-size: 16px; }
+.leaderboard td:first-child { color: #4f98ff; font-weight: 750; }
+.empty { color: #99a1af !important; text-align: center !important; padding: 32px 8px !important; }
+@media (max-width: 959px) { .page { padding: 24px; } .content { grid-template-columns: 1fr; } .header { margin-bottom: 32px; } }
+@media (max-width: 540px) { .page { padding: 18px; } .logo { width: 164px; height: auto; } .header { gap: 12px; } .wordmark { font-size: 11px; } .startCard, .leaderboard { border-radius: 14px; } .startCard { padding: 26px 20px; } }
+:global(input:focus-visible), :global(button:focus-visible) { outline: 3px solid #4f98ff; outline-offset: 3px; }
