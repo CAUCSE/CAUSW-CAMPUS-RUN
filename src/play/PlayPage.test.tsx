@@ -108,6 +108,7 @@ describe('PlayPage', () => {
     for (const character of '본관중앙도서관') fireEvent.keyDown(input, { key: character })
 
     await act(async () => {})
+    expect(screen.getByTitle('기록 저장 실패')).toBeInTheDocument()
     expect(screen.getByText('기록 저장에 실패했습니다. 다시 시도해 주세요.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '다시 저장' })).toBeInTheDocument()
     expect(screen.getByText('완주했습니다')).toBeInTheDocument()

@@ -1,5 +1,5 @@
 import { CTAButton } from '@causw/core'
-import { Time } from '@causw/icons'
+import { ErrorColored, Time } from '@causw/icons'
 import { KeyboardEvent, useEffect, useRef, useState } from 'react'
 
 import { completeGameSession } from '../shared/api'
@@ -144,6 +144,7 @@ export function PlayPage() {
 
           {saveError && (
             <div className={styles.saveError} role="alert">
+              <ErrorColored size={40} title="기록 저장 실패" />
               <p>기록 저장에 실패했습니다. 다시 시도해 주세요.</p>
               <CTAButton type="button" onClick={() => completionPayload && void saveCompletion(completionPayload)} disabled={isSaving}>
                 다시 저장

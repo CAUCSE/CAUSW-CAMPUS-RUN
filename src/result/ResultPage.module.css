@@ -34,5 +34,26 @@ h2 { font-size: 32px; }
 .leaderboard td:first-child { color: #4f98ff; font-weight: 750; }
 .empty { color: #99a1af !important; text-align: center !important; padding: 32px 8px !important; }
 @media (max-width: 959px) { .page { padding: 24px; } .content { grid-template-columns: 1fr; } .header { margin-bottom: 32px; } }
+@media (min-width: 960px) and (max-height: 760px) {
+  .page { padding: 24px clamp(24px, 4vw, 48px); }
+  .header { margin-bottom: 24px; }
+  .resultCard { padding: 26px 32px; }
+  .completeIcon { width: 52px; height: 52px; margin-bottom: 10px; }
+  .eyebrow { margin-bottom: 5px; }
+  h1 { font-size: 34px; }
+  .nickname { margin-top: 7px; }
+  .nicknameDescription { margin-bottom: 12px; }
+  .rank { margin: 4px 0 14px; }
+  .rank strong { font-size: 64px; }
+  .pending { margin: 8px 0 18px; }
+  .stats { margin-bottom: 18px; }
+  .stats div { padding: 12px; }
+  .stats dd { font-size: 18px; }
+  .retryButton { min-height: 56px; font-size: 20px; }
+  .leaderboard { padding: 24px 30px; }
+  .leaderboardHeading { padding-bottom: 14px; }
+  .leaderboard th { padding: 9px 8px 7px; }
+  .leaderboard td { padding: 9px 8px; }
+}
 @media (max-width: 540px) { .page { padding: 18px; } .logo { width: 164px; height: auto; } .header { gap: 12px; } .wordmark { font-size: 11px; } .resultCard, .leaderboard { border-radius: 14px; } .resultCard { padding: 28px 20px; } .rank strong { font-size: 60px; } }
 :global(button:focus-visible) { outline: 3px solid #4f98ff; outline-offset: 3px; }
