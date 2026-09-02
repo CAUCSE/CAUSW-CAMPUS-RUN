@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a React-based multi-page web game for a Central University campus typing booth that validates a student number, records a 12-place completion run through CAUSW backend APIs, and displays a daily leaderboard.
+**Goal:** Build a React-based multi-page web game for a Central University campus typing booth that accepts a student number, records an 18-place completion run through CAUSW backend APIs, and displays a daily leaderboard for eligible users.
 
 **Architecture:** Vite builds three independent HTML entry points: the lobby, play, and result pages. Each entry mounts its own React root; navigation uses normal browser URLs rather than client-side routing. Shared TypeScript modules own API calls, session persistence, domain types, and time formatting; the play page owns deterministic character validation and elapsed-time measurement.
 
 **Tech Stack:** React, TypeScript, Vite multi-page build, Tailwind CSS with CAUSW preset, `@causw/design-system`, Vitest, React Testing Library, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-09-02-cau-campus-typing-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-02-cau-campus-typing-design.md` and `docs/superpowers/specs/2026-09-02-cau-campus-typing-api-contract.md`
 
 **UI Design:** `docs/superpowers/specs/2026-09-02-cau-campus-typing-ui-design.md`
 
@@ -18,10 +18,10 @@
 - Use React only inside each individual page.
 - Require a valid academic number and a public nickname before starting a session.
 - Display only nicknames in all public game and leaderboard views; never render or return academic numbers from public leaderboard data.
-- Use the backend-issued 12-place course and store only the active `sessionId`, nickname, course, start timestamp, and local typo count in `sessionStorage`.
+- Use the backend-issued 18-place course and store only the active `sessionId`, nickname, course, start timestamp, expiry timestamp, and local typo count in `sessionStorage`.
 - Require character-level typo correction before advancing and rank by elapsed time, then typo count.
 - Keep the play screen usable on a 16:9 public PC and retain input focus while playing.
-- Use the API paths in the approved spec: `POST /typing-game/sessions`, `POST /typing-game/sessions/{sessionId}/complete`, and `GET /typing-game/leaderboard`.
+- Use the API paths in the approved contract: `POST /api/v2/campus-typing/sessions`, `POST /api/v2/campus-typing/sessions/{sessionId}/completion`, and `GET /api/v2/campus-typing/leaderboard`.
 - Use Node.js 22.12 or later for the current Vite/Vitest toolchain.
 - Use `@causw/design-system` and its CAUSW Tailwind preset for shared UI components, tokens, and icons; copy the approved `ccssaa-logo.png` asset into `public/images/`.
 
@@ -176,14 +176,17 @@ Add these exported types to `src/shared/types.ts`:
 
 ```ts
 export type CreateSessionRequest = { studentNumber: string; nickname: string }
-export type CreateSessionResponse = { sessionId: string; course: string[] }
-export type CompleteSessionRequest = { elapsedMilliseconds: number; typoCount: number }
+export type CreateSessionResponse = { sessionId: string; course: string[]; startedAt: string; expiresAt: string }
+export type CompleteSessionRequest = { reportedElapsedMilliseconds: number; typoCount: number }
 export type LeaderboardEntry = {
-  rank: number; nickname: string; elapsedMilliseconds: number; typoCount: number
+  rank: number; nickname: string; officialElapsedMilliseconds: number; typoCount: number
 }
-export type CompletionResponse = { entry: LeaderboardEntry; leaderboard: LeaderboardEntry[] }
+export type CompletionResponse = {
+  entry: LeaderboardEntry & { rankingStatus: 'ELIGIBLE' | 'PENDING_REGISTRATION'; rank: number | null }
+  leaderboard: LeaderboardEntry[]
+}
 export type ActiveGame = {
-  sessionId: string; nickname: string; course: string[]; startedAtEpochMs: number; typoCount: number
+  sessionId: string; nickname: string; course: string[]; startedAtEpochMs: number; expiresAtEpochMs: number; typoCount: number
 }
 ```
 
@@ -196,7 +199,7 @@ Mock `fetch` and assert the exact endpoint, method, headers, and JSON body:
 ```ts
 await createGameSession({ studentNumber: '20240001', nickname: '청룡' })
 expect(fetch).toHaveBeenCalledWith(
-  'https://api.example.test/typing-game/sessions',
+  'https://api.example.test/api/v2/campus-typing/sessions',
   expect.objectContaining({ method: 'POST' }),
 )
 ```
@@ -261,7 +264,7 @@ Expected: FAIL because `LobbyPage` does not exist.
 
 - [ ] **Step 3: Implement lobby form and leaderboard**
 
-Render the shared CCSSAA logo header, labeled academic-number and nickname `Field`/`TextInput` controls, a design-system CTA button, game explanation with `BuildingColored`, and a Top 10 table. Trim input; require a non-empty academic number and 1–12 character nickname. On submit, disable controls, call `createGameSession`, save `{ sessionId, nickname, course, startedAtEpochMs: Date.now(), typoCount: 0 }`, then call `window.location.assign('/play.html')`.
+Render the shared CCSSAA logo header, labeled academic-number and nickname `Field`/`TextInput` controls, a design-system CTA button, game explanation with `BuildingColored`, and a Top 10 table. Trim input; require an 8- or 10-digit academic number and 1–12 character nickname. On submit, disable controls, call `createGameSession`, save `{ sessionId, nickname, course, startedAtEpochMs: Date.parse(startedAt), expiresAtEpochMs: Date.parse(expiresAt), typoCount: 0 }`, then call `window.location.assign('/play.html')`.
 
 Load the leaderboard on mount. Render only `rank`, `nickname`, formatted elapsed time, and `typoCount`. If leaderboard loading fails, render `리더보드를 불러오지 못했습니다.` and keep game start usable.
 
@@ -369,7 +372,7 @@ On mount, read `ActiveGame`; when absent, call `window.location.replace('/')`. S
 
 Handle `keydown`: `Backspace` calls `deleteCharacter`, single printable keys call `applyCharacter`, and all paste events call `preventDefault()`. Render the target name in large text, accepted characters, a red one-character error feedback, ordinal `currentIndex + 1 / course.length`, elapsed time, and typo count.
 
-On final completion, calculate elapsed milliseconds once, call `completeGameSession`, then store this exact value:
+On final completion, calculate elapsed milliseconds once, call `completeGameSession` with `{ reportedElapsedMilliseconds, typoCount }`, then store this exact value:
 
 ```ts
 type LastResult = { entry: LeaderboardEntry; leaderboard: LeaderboardEntry[] }
@@ -408,7 +411,7 @@ git commit -m "feat: add timed typing gameplay"
 
 - [ ] **Step 1: Write failing result-page tests**
 
-Test rendering a saved entry's nickname, rank, elapsed time, typo count, and leaderboard. Test that no `cau-typing-last-result` invokes `window.location.replace('/')`. Test the `다시 도전` button removes the stored result and calls `window.location.assign('/')`. Test that a refresh failure retains the saved result and shows `최신 리더보드를 불러오지 못했습니다.`.
+Test rendering a saved entry's nickname, rank, official elapsed time, typo count, and leaderboard. Test that `PENDING_REGISTRATION` renders `CAUSW 가입 후 축제 당일 리더보드에 반영됩니다.` instead of a rank. Test that no `cau-typing-last-result` invokes `window.location.replace('/')`. Test the `다시 도전` button removes the stored result and calls `window.location.assign('/')`. Test that a refresh failure retains the saved result and shows `최신 리더보드를 불러오지 못했습니다.`.
 
 - [ ] **Step 2: Run the result-page test to verify it fails**
 
@@ -418,7 +421,7 @@ Expected: FAIL because `ResultPage` does not exist.
 
 - [ ] **Step 3: Implement result loading and leaderboard refresh**
 
-Read and validate `LastResult` from `sessionStorage`. Redirect to `/` if it is absent or malformed. Render the server-returned rank and score first, then show its leaderboard immediately. Request `getLeaderboard()` once to replace that table with current data; preserve the completed entry when the request fails. Never access or render a student number.
+Read and validate `LastResult` from `sessionStorage`. Redirect to `/` if it is absent or malformed. Render the server-returned official score and rank first when `rankingStatus` is `ELIGIBLE`; otherwise render the 가입 후 리더보드 반영 안내. Show its leaderboard immediately, then request `getLeaderboard()` once to replace that table with current data; preserve the completed entry when the request fails. Never access or render a student number.
 
 - [ ] **Step 4: Style the result page**
 
@@ -488,6 +491,6 @@ git commit -m "test: cover multi-page typing game flow"
 
 ## Plan Self-Review
 
-- Spec coverage: Tasks 3–6 cover academic-number/alias start, 12-place typing, correction, timing, result handling, and public leaderboard. Task 2 covers API boundaries and privacy. Task 7 covers public-PC flow. Admin record management remains a CAUSW backend deliverable and is intentionally outside this frontend repository.
+- Spec coverage: Tasks 3–6 cover academic-number/alias start, 18-place typing, correction, timing, result handling, and public leaderboard. Task 2 covers API boundaries and privacy. Task 7 covers public-PC flow. Admin record management remains a CAUSW backend deliverable and is intentionally outside this frontend repository.
 - Placeholder scan: no deferred implementation markers remain.
 - Type consistency: `CreateSessionResponse`, `ActiveGame`, `CompleteSessionRequest`, `CompletionResponse`, and `LeaderboardEntry` are defined in Task 2 and used consistently in later tasks.
