@@ -3,14 +3,17 @@ import { BuildingColored } from '@causw/icons'
 import { FormEvent, useEffect, useId, useRef, useState } from 'react'
 
 import { createGameSession, getLeaderboard } from '../shared/api'
+import { isApiEnabled } from '../shared/game-config'
 import { formatDuration } from '../shared/format'
 import { saveActiveGame } from '../shared/game-session'
+import { createLocalGameSession } from '../shared/local-game'
 import type { LeaderboardEntry } from '../shared/types'
 import styles from './LobbyPage.module.css'
 
 const STUDENT_NUMBER_PATTERN = /^\d{8}(\d{2})?$/
 
 export function LobbyPage() {
+  const apiEnabled = isApiEnabled()
   const studentNumberId = useId()
   const nicknameId = useId()
   const studentNumberInput = useRef<HTMLInputElement>(null)
@@ -30,10 +33,12 @@ export function LobbyPage() {
   useEffect(() => {
     studentNumberInput.current?.focus()
 
-    void getLeaderboard()
-      .then(setLeaderboard)
-      .catch(() => setLeaderboardError(true))
-  }, [])
+    if (apiEnabled) {
+      void getLeaderboard()
+        .then(setLeaderboard)
+        .catch(() => setLeaderboardError(true))
+    }
+  }, [apiEnabled])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -42,10 +47,9 @@ export function LobbyPage() {
     setIsSubmitting(true)
     setSubmitError('')
     try {
-      const response = await createGameSession({
-        studentNumber: normalizedStudentNumber,
-        nickname: normalizedNickname,
-      })
+      const response = apiEnabled
+        ? await createGameSession({ studentNumber: normalizedStudentNumber, nickname: normalizedNickname })
+        : createLocalGameSession()
       saveActiveGame({
         sessionId: response.sessionId,
         nickname: normalizedNickname,
@@ -53,6 +57,7 @@ export function LobbyPage() {
         startedAtEpochMs: Date.parse(response.startedAt),
         expiresAtEpochMs: Date.parse(response.expiresAt),
         typoCount: 0,
+        ...(!apiEnabled ? { isTestMode: true } : {}),
       })
       window.location.assign('/play.html')
     } catch (error) {
@@ -71,13 +76,14 @@ export function LobbyPage() {
 
       <section className={styles.content} aria-label="캠퍼스 타이핑 게임 대기 화면">
         <article className={styles.startCard}>
-          <div className={styles.introduction}>
+            <div className={styles.introduction}>
             <BuildingColored size={48} aria-hidden="true" />
             <div>
               <p className={styles.eyebrow}>CENTRAL UNIVERSITY</p>
               <h1>캠퍼스를 빠르게 달려보세요</h1>
               <p>18개의 캠퍼스 장소를 가장 빠르게 입력해 Top 10에 도전하세요.</p>
             </div>
+            {!apiEnabled && <p className={styles.testMode} role="status">테스트 모드입니다. 기록은 리더보드에 반영되지 않습니다.</p>}
           </div>
 
           <form className={styles.form} onSubmit={handleSubmit} noValidate>
@@ -128,7 +134,9 @@ export function LobbyPage() {
             <p className={styles.eyebrow}>TODAY'S BEST</p>
             <h2 id="leaderboard-title">Top 10</h2>
           </div>
-          {leaderboardError ? (
+          {!apiEnabled ? (
+            <p className={styles.empty}>테스트 모드에서는 리더보드를 표시하지 않습니다.</p>
+          ) : leaderboardError ? (
             <p className={styles.leaderboardError} role="status">리더보드를 불러오지 못했습니다.</p>
           ) : (
             <table>

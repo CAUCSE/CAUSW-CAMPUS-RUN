@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   clearActiveGame: vi.fn(),
   saveActiveGame: vi.fn(),
   completeGameSession: vi.fn(),
+  completeLocalGame: vi.fn(),
 }))
 
 vi.mock('../shared/game-session', () => ({
@@ -17,6 +18,7 @@ vi.mock('../shared/game-session', () => ({
 }))
 
 vi.mock('../shared/api', () => ({ completeGameSession: mocks.completeGameSession }))
+vi.mock('../shared/local-game', () => ({ completeLocalGame: mocks.completeLocalGame }))
 
 const activeGame = {
   sessionId: 'session-1',
@@ -45,6 +47,7 @@ describe('PlayPage', () => {
     sessionStorage.clear()
     mocks.readActiveGame.mockReturnValue(activeGame)
     mocks.completeGameSession.mockResolvedValue(completion)
+    mocks.completeLocalGame.mockReturnValue({ ...completion, recordId: 'local-1', rankingStatus: 'PENDING_REGISTRATION', rank: null, leaderboard: [], isTestMode: true })
   })
 
   afterEach(() => {
@@ -111,6 +114,33 @@ describe('PlayPage', () => {
 
     expect(input).toHaveValue('본')
     expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentInput: '본' }))
+  })
+
+  test('does not count an initial Hangul jamo as a typo before IME composition completes', () => {
+    render(<PlayPage />)
+    const input = screen.getByLabelText('장소 입력')
+
+    const keyDown = fireEvent.keyDown(input, { key: 'ㅂ' })
+    expect(keyDown).toBe(true)
+    expect(screen.getByText('오타 0회')).toBeInTheDocument()
+
+    fireEvent.compositionStart(input)
+    fireEvent.compositionEnd(input, { data: '본' })
+
+    expect(input).toHaveValue('본')
+    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentInput: '본', typoCount: 0 }))
+  })
+
+  test('continues accepting correct input after a typo', () => {
+    render(<PlayPage />)
+    const input = screen.getByLabelText('장소 입력')
+
+    fireEvent.keyDown(input, { key: '가' })
+    expect(screen.getByText('오타 1회')).toBeInTheDocument()
+    fireEvent.keyDown(input, { key: '본' })
+
+    expect(input).toHaveValue('본')
+    expect(screen.getByText('오타 1회')).toBeInTheDocument()
   })
 
   test('submits a fixed completion payload, preserves the full response, then navigates', async () => {
@@ -188,5 +218,20 @@ describe('PlayPage', () => {
     const event = fireEvent.paste(screen.getByLabelText('장소 입력'), { clipboardData: { getData: () => '본관' } })
 
     expect(event).toBe(false)
+  })
+
+  test('stores a local completion without calling the API in test mode', async () => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
+    mocks.readActiveGame.mockReturnValue({ ...activeGame, isTestMode: true })
+    render(<PlayPage />)
+
+    const input = screen.getByLabelText('장소 입력')
+    for (const character of '본관중앙도서관') fireEvent.keyDown(input, { key: character })
+
+    await act(async () => {})
+    expect(mocks.completeGameSession).not.toHaveBeenCalled()
+    expect(mocks.completeLocalGame).toHaveBeenCalledWith('청룡', { reportedElapsedMilliseconds: 0, typoCount: 0 })
+    expect(assign).toHaveBeenCalledWith('/result.html')
   })
 })

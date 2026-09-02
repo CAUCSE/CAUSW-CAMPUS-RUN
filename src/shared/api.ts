@@ -5,13 +5,11 @@ import type {
   CreateSessionResponse,
   LeaderboardEntry,
 } from './types'
+import { CAMPUS_COURSE } from './course'
 
 const NETWORK_ERROR_MESSAGE = '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
 const MALFORMED_RESPONSE_MESSAGE = '서버 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'
-const CAMPUS_COURSE = new Set([
-  '영신관', '파이퍼홀', '수림과학관', '학생회관', '본관', '전산정보관', '서라벌홀', '중앙도서관', '봅스트홀',
-  '제2공학관', '창업보육관', '중앙문화예술관', '대학원', '법학관', '미디어공연영상관', '글로벌하우스', '블루미르홀', '100주년기념관',
-])
+const CAMPUS_COURSE_SET = new Set<string>(CAMPUS_COURSE)
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -102,9 +100,9 @@ function isCompletionResponse(value: unknown): value is CompletionResponse {
 }
 
 function isCampusCourse(value: unknown[]): value is string[] {
-  return value.length === CAMPUS_COURSE.size
-    && value.every((place) => typeof place === 'string' && CAMPUS_COURSE.has(place))
-    && new Set(value).size === CAMPUS_COURSE.size
+  return value.length === CAMPUS_COURSE_SET.size
+    && value.every((place) => typeof place === 'string' && CAMPUS_COURSE_SET.has(place))
+    && new Set(value).size === CAMPUS_COURSE_SET.size
 }
 
 function isLeaderboard(value: unknown): value is LeaderboardEntry[] {

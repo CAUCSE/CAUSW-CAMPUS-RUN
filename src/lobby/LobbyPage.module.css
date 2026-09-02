@@ -16,6 +16,7 @@ h2 { font-size: 32px; }
 .form { display: grid; gap: 20px; }
 .startButton { min-height: 64px; margin-top: 8px; font-size: 22px; font-weight: 700; }
 .submitError, .leaderboardError { margin: 0; color: #fd5c5f; font-size: 15px; }
+.testMode { margin: 22px 0 0; color: #f7c948; font-size: 15px; }
 .leaderboard { padding: clamp(28px, 3vw, 44px); overflow: hidden; }
 .leaderboardHeading { display: flex; align-items: end; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid #364153; }
 .leaderboard table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }

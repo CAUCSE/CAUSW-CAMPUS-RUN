@@ -5,15 +5,18 @@ import { ClipboardEvent, CompositionEvent, FormEvent, KeyboardEvent, useEffect, 
 import { completeGameSession } from '../shared/api'
 import { formatDuration } from '../shared/format'
 import { clearActiveGame, readActiveGame, saveActiveGame } from '../shared/game-session'
+import { completeLocalGame } from '../shared/local-game'
 import type { ActiveGame, CompleteSessionRequest } from '../shared/types'
 import { applyCharacter, createGameState, deleteCharacter, type GameState, isCourseComplete } from './game-state'
 import styles from './PlayPage.module.css'
 
 const LAST_RESULT_KEY = 'cau-typing-last-result'
+const DEBUG_ENABLED = import.meta.env.VITE_TYPING_GAME_DEBUG === 'true'
 
 export function PlayPage() {
   const [activeGame] = useState(() => readActiveGame())
   const [gameState, setGameState] = useState(() => createResumedGameState(activeGame))
+  const [inputValue, setInputValue] = useState(() => createResumedGameState(activeGame).currentInput)
   const [now, setNow] = useState(() => Date.now())
   const [completionPayload, setCompletionPayload] = useState<CompleteSessionRequest | null>(null)
   const [saveError, setSaveError] = useState(false)
@@ -25,6 +28,13 @@ export function PlayPage() {
   const expiryClearedRef = useRef(false)
 
   useEffect(() => {
+    debug('active-game', activeGame === null ? { found: false } : {
+      found: true,
+      sessionId: activeGame.sessionId,
+      courseLength: activeGame.course.length,
+      currentIndex: activeGame.currentIndex ?? 0,
+      isTestMode: activeGame.isTestMode === true,
+    })
     if (activeGame === null) {
       window.location.replace('/')
       return
@@ -46,6 +56,7 @@ export function PlayPage() {
   function expireSession() {
     if (expiryClearedRef.current) return
     expiryClearedRef.current = true
+    debug('session-expired', { elapsedMilliseconds, isComplete })
     clearActiveGame()
   }
 
@@ -56,14 +67,19 @@ export function PlayPage() {
   async function saveCompletion(payload: CompleteSessionRequest) {
     if (isSaving) return
 
+    debug('completion-save-start', { ...payload, isTestMode: game.isTestMode === true })
     setIsSaving(true)
     setSaveError(false)
     try {
-      const response = await completeGameSession(game.sessionId, payload)
+      const response = game.isTestMode
+        ? completeLocalGame(game.nickname, payload)
+        : await completeGameSession(game.sessionId, payload)
       sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(response))
+      debug('completion-save-success', { recordId: response.recordId, rankingStatus: response.rankingStatus })
       clearActiveGame()
       window.location.assign('/result.html')
-    } catch {
+    } catch (error) {
+      debug('completion-save-error', { message: error instanceof Error ? error.message : String(error) })
       setSaveError(true)
       setIsSaving(false)
     }
@@ -81,6 +97,7 @@ export function PlayPage() {
   }
 
   function persistGameState(nextState: GameState) {
+    debug('game-state-persist', stateSnapshot(nextState))
     saveActiveGame({
       ...game,
       currentIndex: nextState.currentIndex,
@@ -90,6 +107,7 @@ export function PlayPage() {
   }
 
   function applyCommittedText(text: string) {
+    debug('committed-text-received', { text, ...stateSnapshot(gameState), isSaving, isExpired })
     if (isComplete || isExpired || Date.now() >= game.expiresAtEpochMs || isSaving) {
       if (Date.now() >= game.expiresAtEpochMs) {
         expireSession()
@@ -105,13 +123,22 @@ export function PlayPage() {
     }
     if (nextState === gameState) return
 
+    debug('committed-text-applied', { text, before: stateSnapshot(gameState), after: stateSnapshot(nextState) })
     setGameState(nextState)
+    setInputValue(nextState.currentInput)
     persistGameState(nextState)
     inputRef.current?.focus()
     if (isCourseComplete(nextState)) complete(nextState.typoCount)
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    debug('keydown', {
+      key: event.key,
+      code: event.code,
+      isComposing: event.nativeEvent.isComposing,
+      composingRef: composingRef.current,
+      inputValue: event.currentTarget.value,
+    })
     if (event.nativeEvent.isComposing || composingRef.current) return
     if (isComplete || isExpired || Date.now() >= game.expiresAtEpochMs || isSaving) {
       if (Date.now() >= game.expiresAtEpochMs) {
@@ -125,8 +152,14 @@ export function PlayPage() {
       event.preventDefault()
       const nextState = deleteCharacter(gameState)
       setGameState(nextState)
+      setInputValue(nextState.currentInput)
       persistGameState(nextState)
       inputRef.current?.focus()
+    } else if (isHangulJamo(event.key)) {
+      // Korean IMEs can emit the first jamo before compositionstart. Let the
+      // browser finish composing it; handleCompositionEnd receives the final syllable.
+      debug('keydown-hangul-jamo-deferred', { key: event.key })
+      return
     } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
       event.preventDefault()
       applyCommittedText(event.key)
@@ -136,12 +169,14 @@ export function PlayPage() {
   }
 
   function handleCompositionStart() {
+    debug('composition-start', { inputValue: inputRef.current?.value ?? '' })
     composingRef.current = true
   }
 
   function handleCompositionEnd(event: CompositionEvent<HTMLInputElement>) {
     composingRef.current = false
     const committedText = event.data
+    debug('composition-end', { data: committedText, inputValue: event.currentTarget.value })
     if (committedText.length === 0) return
 
     compositionCommitRef.current = committedText
@@ -150,8 +185,15 @@ export function PlayPage() {
   }
 
   function handleInput(event: FormEvent<HTMLInputElement>) {
-    if (composingRef.current) return
     const committedText = (event.nativeEvent as InputEvent).data
+    debug('input', {
+      data: committedText,
+      inputType: (event.nativeEvent as InputEvent).inputType,
+      isComposing: (event.nativeEvent as InputEvent).isComposing,
+      composingRef: composingRef.current,
+      inputValue: event.currentTarget.value,
+    })
+    if (composingRef.current) return
     if (typeof committedText === 'string' && committedText.length > 0) {
       if (compositionCommitRef.current === committedText) return
       applyCommittedText(committedText)
@@ -160,7 +202,13 @@ export function PlayPage() {
     applyCommittedText(committedSuffix(event.currentTarget.value, gameState.currentInput))
   }
 
+  function handleChange(event: FormEvent<HTMLInputElement>) {
+    debug('change', { inputValue: event.currentTarget.value, composingRef: composingRef.current })
+    setInputValue(event.currentTarget.value)
+  }
+
   function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    debug('paste-blocked', { textLength: event.clipboardData.getData('text').length })
     event.preventDefault()
     inputRef.current?.focus()
   }
@@ -208,8 +256,8 @@ export function PlayPage() {
                 ref={inputRef}
                 id="place-input"
                 className={styles.input}
-                value={gameState.currentInput}
-                onChange={() => undefined}
+                value={inputValue}
+                onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 onInput={handleInput}
                 onCompositionStart={handleCompositionStart}
@@ -255,4 +303,21 @@ function createResumedGameState(game: ActiveGame | null): GameState {
 
 function committedSuffix(value: string, acceptedInput: string): string {
   return value.startsWith(acceptedInput) ? value.slice(acceptedInput.length) : ''
+}
+
+function isHangulJamo(key: string): boolean {
+  return key.length === 1 && /[\u1100-\u11ff\u3130-\u318f]/u.test(key)
+}
+
+function stateSnapshot(state: GameState) {
+  return {
+    currentIndex: state.currentIndex,
+    currentInput: state.currentInput,
+    typoCount: state.typoCount,
+    lastMistypedCharacter: state.lastMistypedCharacter,
+  }
+}
+
+function debug(event: string, details: Record<string, unknown>): void {
+  if (DEBUG_ENABLED) console.debug(`[CAU Campus Typing] ${event}`, details)
 }

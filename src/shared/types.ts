@@ -27,6 +27,7 @@ export type CompletionResponse = {
   rankingStatus: 'ELIGIBLE' | 'PENDING_REGISTRATION'
   rank: number | null
   leaderboard: LeaderboardEntry[]
+  isTestMode?: boolean
 }
 
 export type ActiveGame = {
@@ -36,6 +37,7 @@ export type ActiveGame = {
   startedAtEpochMs: number
   expiresAtEpochMs: number
   typoCount: number
+  isTestMode?: boolean
   currentIndex?: number
   currentInput?: string
 }

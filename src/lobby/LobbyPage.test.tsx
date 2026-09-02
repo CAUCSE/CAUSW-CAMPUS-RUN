@@ -6,6 +6,7 @@ import { LobbyPage } from './LobbyPage'
 
 const mocks = vi.hoisted(() => ({
   createGameSession: vi.fn(),
+  createLocalGameSession: vi.fn(),
   getLeaderboard: vi.fn(),
   saveActiveGame: vi.fn(),
 }))
@@ -15,6 +16,8 @@ vi.mock('../shared/api', () => ({
   getLeaderboard: mocks.getLeaderboard,
 }))
 
+vi.mock('../shared/local-game', () => ({ createLocalGameSession: mocks.createLocalGameSession }))
+
 vi.mock('../shared/game-session', () => ({ saveActiveGame: mocks.saveActiveGame }))
 
 describe('LobbyPage', () => {
@@ -22,6 +25,7 @@ describe('LobbyPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubEnv('VITE_TYPING_GAME_API_ENABLED', 'true')
     mocks.getLeaderboard.mockResolvedValue([
       { rank: 1, nickname: '사자', officialElapsedMilliseconds: 18_420, typoCount: 1 },
     ])
@@ -77,5 +81,26 @@ describe('LobbyPage', () => {
 
     expect(await screen.findByText('리더보드를 불러오지 못했습니다.')).toBeInTheDocument()
     expect(screen.getByLabelText('학번')).toBeEnabled()
+  })
+
+  test('starts a local game and does not request the leaderboard in test mode', async () => {
+    vi.stubEnv('VITE_TYPING_GAME_API_ENABLED', 'false')
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
+    mocks.createLocalGameSession.mockReturnValue({
+      sessionId: 'local-1', course: ['영신관'], startedAt: '2026-09-02T01:00:00.000Z', expiresAt: '2026-09-02T01:10:00.000Z',
+    })
+    const user = userEvent.setup()
+
+    render(<LobbyPage />)
+    await user.type(screen.getByLabelText('학번'), '20240001')
+    await user.type(screen.getByLabelText('별명'), '청룡')
+    await user.click(screen.getByRole('button', { name: '게임 시작' }))
+
+    expect(mocks.getLeaderboard).not.toHaveBeenCalled()
+    expect(mocks.createGameSession).not.toHaveBeenCalled()
+    expect(mocks.createLocalGameSession).toHaveBeenCalledOnce()
+    expect(screen.getByText('테스트 모드입니다. 기록은 리더보드에 반영되지 않습니다.')).toBeInTheDocument()
+    expect(assign).toHaveBeenCalledWith('/play.html')
   })
 })

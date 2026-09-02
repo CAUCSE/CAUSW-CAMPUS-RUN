@@ -20,6 +20,7 @@ const result = {
 describe('ResultPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubEnv('VITE_TYPING_GAME_API_ENABLED', 'true')
     sessionStorage.clear()
     sessionStorage.setItem('cau-typing-last-result', JSON.stringify(result))
     mocks.getLeaderboard.mockResolvedValue(result.leaderboard)
@@ -76,5 +77,19 @@ describe('ResultPage', () => {
     await act(async () => {})
     expect(screen.getByText('청룡')).toBeInTheDocument()
     expect(screen.getByText('최신 리더보드를 불러오지 못했습니다.')).toBeInTheDocument()
+  })
+
+  test('does not request or display the leaderboard for a local test result', async () => {
+    sessionStorage.setItem('cau-typing-last-result', JSON.stringify({
+      ...result, recordId: 'local-1', rankingStatus: 'PENDING_REGISTRATION', rank: null, leaderboard: [], isTestMode: true,
+    }))
+
+    render(<ResultPage />)
+
+    expect(screen.getByText('테스트 완주 완료')).toBeInTheDocument()
+    expect(screen.getByText('테스트 모드입니다. 기록은 리더보드에 반영되지 않습니다.')).toBeInTheDocument()
+    expect(screen.getByText('테스트 모드에서는 리더보드를 표시하지 않습니다.')).toBeInTheDocument()
+    await act(async () => {})
+    expect(mocks.getLeaderboard).not.toHaveBeenCalled()
   })
 })

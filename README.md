@@ -16,6 +16,14 @@ npm run dev
 
 `.env.local`에서 `VITE_TYPING_GAME_API_BASE_URL`을 CAUSW 백엔드 주소로 변경할 수 있습니다.
 
+백엔드 없이 플레이 흐름을 확인하려면 다음을 설정하세요. 테스트 모드에서는 기록을 전송하거나 리더보드를 조회하지 않습니다.
+
+```dotenv
+VITE_TYPING_GAME_API_ENABLED=false
+```
+
+브라우저 콘솔에서 입력 이벤트를 확인하려면 `VITE_TYPING_GAME_DEBUG=true`를 추가하세요. 학번은 로그에 기록하지 않습니다.
+
 ## Verification
 
 ```bash

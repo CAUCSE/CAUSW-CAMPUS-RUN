@@ -3,6 +3,7 @@ import { Check } from '@causw/icons'
 import { useEffect, useState } from 'react'
 
 import { getLeaderboard } from '../shared/api'
+import { isApiEnabled } from '../shared/game-config'
 import { formatDuration } from '../shared/format'
 import type { CompletionResponse, LeaderboardEntry } from '../shared/types'
 import styles from './ResultPage.module.css'
@@ -13,6 +14,7 @@ export function ResultPage() {
   const [result] = useState(readLastResult)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(() => result?.leaderboard ?? [])
   const [leaderboardError, setLeaderboardError] = useState(false)
+  const isTestMode = result?.isTestMode === true || !isApiEnabled()
 
   useEffect(() => {
     if (result === null) {
@@ -20,10 +22,12 @@ export function ResultPage() {
       return
     }
 
-    void getLeaderboard()
-      .then(setLeaderboard)
-      .catch(() => setLeaderboardError(true))
-  }, [result])
+    if (!isTestMode) {
+      void getLeaderboard()
+        .then(setLeaderboard)
+        .catch(() => setLeaderboardError(true))
+    }
+  }, [isTestMode, result])
 
   if (result === null) return null
 
@@ -46,11 +50,13 @@ export function ResultPage() {
         <article className={styles.resultCard}>
           <div className={styles.completeIcon}><Check size={32} aria-hidden="true" /></div>
           <p className={styles.eyebrow}>CAMPUS RUN COMPLETE</p>
-          <h1>완주 기록 저장 완료</h1>
+          <h1>{isTestMode ? '테스트 완주 완료' : '완주 기록 저장 완료'}</h1>
           <p className={styles.nickname}>{result.nickname}</p>
           <p className={styles.nicknameDescription}>님의 기록</p>
 
-          {isEligible ? (
+          {isTestMode ? (
+            <p className={styles.pending} role="status">테스트 모드입니다. 기록은 리더보드에 반영되지 않습니다.</p>
+          ) : isEligible ? (
             <div className={styles.rank} aria-label={`현재 순위 ${result.rank}위`}>
               <span>현재 순위</span>
               <strong>{result.rank}위</strong>
@@ -72,6 +78,7 @@ export function ResultPage() {
             <p className={styles.eyebrow}>TODAY'S BEST</p>
             <h2 id="leaderboard-title">Top 10</h2>
           </div>
+          {isTestMode ? <p className={styles.empty}>테스트 모드에서는 리더보드를 표시하지 않습니다.</p> : <>
           {leaderboardError && <p className={styles.leaderboardError} role="status">최신 리더보드를 불러오지 못했습니다.</p>}
           <table>
             <thead><tr><th scope="col">순위</th><th scope="col">별명</th><th scope="col">기록</th><th scope="col">오타</th></tr></thead>
@@ -84,6 +91,7 @@ export function ResultPage() {
               {leaderboard.length === 0 && <tr><td colSpan={4} className={styles.empty}>아직 등록된 기록이 없습니다.</td></tr>}
             </tbody>
           </table>
+          </>}
         </aside>
       </section>
     </main>
@@ -108,7 +116,8 @@ function isCompletionResponse(value: unknown): value is CompletionResponse {
     || typeof value.nickname !== 'string'
     || !isNonNegativeNumber(value.officialElapsedMilliseconds)
     || !isNonNegativeNumber(value.typoCount)
-    || !isLeaderboard(value.leaderboard)) return false
+    || !isLeaderboard(value.leaderboard)
+    || (value.isTestMode !== undefined && typeof value.isTestMode !== 'boolean')) return false
 
   return (value.rankingStatus === 'ELIGIBLE' && typeof value.rank === 'number')
     || (value.rankingStatus === 'PENDING_REGISTRATION' && value.rank === null)
