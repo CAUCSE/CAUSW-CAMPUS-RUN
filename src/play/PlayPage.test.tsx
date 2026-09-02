@@ -106,7 +106,6 @@ describe('PlayPage', () => {
     const input = screen.getByLabelText('장소 입력')
 
     fireEvent.compositionStart(input)
-    ;(input as HTMLInputElement).value = '본'
     fireEvent.input(input, { data: '본', isComposing: true })
     fireEvent.compositionEnd(input, { data: '본' })
 

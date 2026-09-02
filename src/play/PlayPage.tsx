@@ -21,6 +21,7 @@ export function PlayPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
   const composingRef = useRef(false)
+  const compositionCommitRef = useRef<string | null>(null)
   const expiryClearedRef = useRef(false)
 
   useEffect(() => {
@@ -140,11 +141,22 @@ export function PlayPage() {
 
   function handleCompositionEnd(event: CompositionEvent<HTMLInputElement>) {
     composingRef.current = false
-    applyCommittedText(committedSuffix(event.currentTarget.value, gameState.currentInput))
+    const committedText = event.data
+    if (committedText.length === 0) return
+
+    compositionCommitRef.current = committedText
+    queueMicrotask(() => { compositionCommitRef.current = null })
+    applyCommittedText(committedText)
   }
 
   function handleInput(event: FormEvent<HTMLInputElement>) {
     if (composingRef.current) return
+    const committedText = (event.nativeEvent as InputEvent).data
+    if (typeof committedText === 'string' && committedText.length > 0) {
+      if (compositionCommitRef.current === committedText) return
+      applyCommittedText(committedText)
+      return
+    }
     applyCommittedText(committedSuffix(event.currentTarget.value, gameState.currentInput))
   }
 

@@ -140,11 +140,10 @@ async function typePlaceCharacterByCharacter(input: ReturnType<Page['getByLabel'
 async function typePlaceByComposition(input: ReturnType<Page['getByLabel']>, place: string) {
   for (const character of place) {
     await input.evaluate((element, committedCharacter) => {
-      const field = element as HTMLInputElement
-      field.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
-      field.value += committedCharacter
-      field.dispatchEvent(new InputEvent('input', { bubbles: true, data: committedCharacter, inputType: 'insertCompositionText', isComposing: true }))
-      field.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: committedCharacter }))
+      element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+      element.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: committedCharacter, inputType: 'insertCompositionText', isComposing: true }))
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, data: committedCharacter, inputType: 'insertCompositionText', isComposing: true }))
+      element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: committedCharacter }))
     }, character)
   }
 }
