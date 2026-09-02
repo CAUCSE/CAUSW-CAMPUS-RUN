@@ -40,6 +40,8 @@ function isActiveGame(value: unknown): value is ActiveGame {
     && isFiniteNumber(value.startedAtEpochMs)
     && isFiniteNumber(value.expiresAtEpochMs)
     && isFiniteNumber(value.typoCount)
+    && (value.currentIndex === undefined || isCourseIndex(value.currentIndex, value.course.length))
+    && (value.currentInput === undefined || typeof value.currentInput === 'string')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,4 +50,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isCourseIndex(value: unknown, courseLength: number): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= courseLength
 }

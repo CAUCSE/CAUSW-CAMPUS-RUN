@@ -18,6 +18,7 @@ h1 { min-height: 1.2em; margin: 0; color: #fff; font-size: clamp(52px, 7vw, 80px
 .input:focus-visible { border-color: #4f98ff; box-shadow: 0 0 0 4px rgb(79 152 255 / 35%); }
 .error { min-height: 28px; margin: 12px 0 0; color: #fd5c5f; font-size: 24px; font-weight: 700; }
 .completedDescription { margin: 22px 0 0; color: #99a1af; font-size: 20px; }
+.newGameButton { margin-top: 28px; }
 .saveError { display: grid; justify-items: center; gap: 18px; margin: 36px auto 0; color: #fd5c5f; font-size: 18px; }
 .saveError p { margin: 0; }
 @media (max-width: 640px) { .page { padding: 20px; } .header { gap: 12px; } .logo { width: 164px; height: auto; } .wordmark { font-size: 11px; } .game { min-height: calc(100vh - 74px); } .statusBar { gap: 12px; font-size: 15px; } .timer svg { width: 18px; } .typingCard { min-height: 360px; padding: 32px 20px; border-radius: 18px; } }

@@ -37,12 +37,14 @@ export function applyCharacter(state: GameState, character: string): GameState {
       ...state,
       currentIndex: state.currentIndex + 1,
       currentInput: '',
+      lastMistypedCharacter: null,
     }
   }
 
   return {
     ...state,
     currentInput: nextInput,
+    lastMistypedCharacter: null,
   }
 }
 

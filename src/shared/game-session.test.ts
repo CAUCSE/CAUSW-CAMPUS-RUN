@@ -23,6 +23,13 @@ describe('active game storage', () => {
     expect(readActiveGame()).toEqual(game)
   })
 
+  test('round-trips resumable progress', () => {
+    const inProgress = { ...game, currentIndex: 0, currentInput: '본', typoCount: 2 }
+    saveActiveGame(inProgress)
+
+    expect(readActiveGame()).toEqual(inProgress)
+  })
+
   test('removes corrupted data', () => {
     sessionStorage.setItem('cau-typing-active-game', '{bad json')
 

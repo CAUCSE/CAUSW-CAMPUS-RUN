@@ -36,4 +36,6 @@ export type ActiveGame = {
   startedAtEpochMs: number
   expiresAtEpochMs: number
   typoCount: number
+  currentIndex?: number
+  currentInput?: string
 }

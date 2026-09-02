@@ -6,12 +6,14 @@ import { PlayPage } from './PlayPage'
 const mocks = vi.hoisted(() => ({
   readActiveGame: vi.fn(),
   clearActiveGame: vi.fn(),
+  saveActiveGame: vi.fn(),
   completeGameSession: vi.fn(),
 }))
 
 vi.mock('../shared/game-session', () => ({
   readActiveGame: mocks.readActiveGame,
   clearActiveGame: mocks.clearActiveGame,
+  saveActiveGame: mocks.saveActiveGame,
 }))
 
 vi.mock('../shared/api', () => ({ completeGameSession: mocks.completeGameSession }))
@@ -80,6 +82,38 @@ describe('PlayPage', () => {
     expect(screen.getByText('00:00.34')).toBeInTheDocument()
   })
 
+  test('restores and persists progress so a reload cannot reset it', () => {
+    const resumedGame = { ...activeGame, currentIndex: 1, currentInput: '중앙', typoCount: 2 }
+    mocks.readActiveGame.mockReturnValue(resumedGame)
+    render(<PlayPage />)
+    const input = screen.getByLabelText('장소 입력')
+
+    expect(screen.getByText('2 / 2')).toBeInTheDocument()
+    expect(screen.getByText('오타 2회')).toBeInTheDocument()
+    expect(input).toHaveValue('중앙')
+
+    fireEvent.keyDown(input, { key: '도' })
+    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith({
+      ...resumedGame,
+      currentIndex: 1,
+      currentInput: '중앙도',
+      typoCount: 2,
+    })
+  })
+
+  test('accepts committed Korean IME input without relying on a final Hangul keydown', () => {
+    render(<PlayPage />)
+    const input = screen.getByLabelText('장소 입력')
+
+    fireEvent.compositionStart(input)
+    ;(input as HTMLInputElement).value = '본'
+    fireEvent.input(input, { data: '본', isComposing: true })
+    fireEvent.compositionEnd(input, { data: '본' })
+
+    expect(input).toHaveValue('본')
+    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentInput: '본' }))
+  })
+
   test('submits a fixed completion payload, preserves the full response, then navigates', async () => {
     const assign = vi.fn()
     Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
@@ -136,6 +170,18 @@ describe('PlayPage', () => {
     expect(input).toHaveValue('')
     expect(screen.getByText('1 / 2')).toBeInTheDocument()
     expect(mocks.completeGameSession).not.toHaveBeenCalled()
+  })
+
+  test('clears an expired session and provides a new-game action', () => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
+    mocks.readActiveGame.mockReturnValue({ ...activeGame, expiresAtEpochMs: 1_000 })
+
+    render(<PlayPage />)
+
+    expect(mocks.clearActiveGame).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '새 게임 시작' }))
+    expect(assign).toHaveBeenCalledWith('/')
   })
 
   test('blocks paste input', () => {

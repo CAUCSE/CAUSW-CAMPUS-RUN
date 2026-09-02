@@ -34,6 +34,15 @@ describe('character validation game state', () => {
     expect(state.typoCount).toBe(1)
   })
 
+  test('clears an error indicator when the replacement character is correct', () => {
+    let state = createGameState(['본관'])
+    state = applyCharacter(state, '브')
+    state = applyCharacter(state, '본')
+
+    expect(state.currentInput).toBe('본')
+    expect(state.lastMistypedCharacter).toBeNull()
+  })
+
   test('ignores multi-character paste input', () => {
     const initial = createGameState(['본관'])
 
