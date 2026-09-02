@@ -6,9 +6,11 @@
 
 **Architecture:** Vite builds three independent HTML entry points: the lobby, play, and result pages. Each entry mounts its own React root; navigation uses normal browser URLs rather than client-side routing. Shared TypeScript modules own API calls, session persistence, domain types, and time formatting; the play page owns deterministic character validation and elapsed-time measurement.
 
-**Tech Stack:** React, TypeScript, Vite multi-page build, CSS Modules, Vitest, React Testing Library, Playwright.
+**Tech Stack:** React, TypeScript, Vite multi-page build, Tailwind CSS with CAUSW preset, `@causw/design-system`, Vitest, React Testing Library, Playwright.
 
 **Spec:** `docs/superpowers/specs/2026-09-02-cau-campus-typing-design.md`
+
+**UI Design:** `docs/superpowers/specs/2026-09-02-cau-campus-typing-ui-design.md`
 
 ## Global Constraints
 
@@ -21,6 +23,7 @@
 - Keep the play screen usable on a 16:9 public PC and retain input focus while playing.
 - Use the API paths in the approved spec: `POST /typing-game/sessions`, `POST /typing-game/sessions/{sessionId}/complete`, and `GET /typing-game/leaderboard`.
 - Use Node.js 22.12 or later for the current Vite/Vitest toolchain.
+- Use `@causw/design-system` and its CAUSW Tailwind preset for shared UI components, tokens, and icons; copy the approved `ccssaa-logo.png` asset into `public/images/`.
 
 ---
 
@@ -38,7 +41,8 @@
 | `src/play/game-state.ts` | Pure character-validation reducer and game-state helpers. |
 | `src/play/PlayPage.tsx` | Timer, input focus, course progression, and completion submission. |
 | `src/result/ResultPage.tsx` | Saved result, rank, refreshed leaderboard, retry navigation. |
-| `src/styles/*.module.css` | Page-scoped responsive styling. |
+| `src/**/*.module.css` | Page-scoped 16:9 game-layout adjustments layered on CAUSW design-system styles. |
+| `public/images/ccssaa-logo.png` | Approved CCSSAA logo asset used in the shared header. |
 | `src/**/*.test.ts(x)` | Unit and component tests colocated with their subject. |
 | `e2e/typing-game.spec.ts` | Browser-level lobby-to-result happy path and failure flows. |
 
@@ -57,6 +61,7 @@
 - Create: `src/test/setup.ts`
 - Create: `src/test/smoke.test.ts`
 - Create: `.gitignore`
+- Create: `public/images/ccssaa-logo.png`
 
 **Interfaces:**
 - Produces Vite build entries named `lobby`, `play`, and `result` and scripts `dev`, `build`, `test`, `test:watch`, and `test:e2e`.
@@ -80,7 +85,7 @@ Expected: FAIL because `package.json` and the Vitest configuration do not exist.
 
 - [ ] **Step 3: Add dependencies and scripts**
 
-Create `package.json` with React runtime dependencies and development dependencies for `@vitejs/plugin-react`, TypeScript, Vite, Vitest, jsdom, React Testing Library, `@testing-library/jest-dom`, and Playwright. Add scripts:
+Create `package.json` with React runtime dependencies for `@causw/design-system`, `@vitejs/plugin-react`, React, and React DOM, and development dependencies for Tailwind CSS, TypeScript, Vite, Vitest, jsdom, React Testing Library, `@testing-library/jest-dom`, and Playwright. Configure Tailwind with the CAUSW preset and import `@causw/core/styles` once from each page entry. Add scripts:
 
 ```json
 {
@@ -117,7 +122,7 @@ Each HTML file must include its own root and TypeScript module. For example, `pl
 <script type="module" src="/src/play/main.tsx"></script>
 ```
 
-Create temporary main files that mount a distinct heading to their matching root. Add `.gitignore` entries for `node_modules/`, `dist/`, `playwright-report/`, `test-results/`, and `.superpowers/`.
+Create temporary main files that mount a distinct heading to their matching root. Copy the approved `ccssaa-logo.png` from the CAUSW frontend v3 source into `public/images/`. Add `.gitignore` entries for `node_modules/`, `dist/`, `playwright-report/`, `test-results/`, and `.superpowers/`.
 
 - [ ] **Step 5: Run tests and production build**
 
@@ -128,7 +133,7 @@ Expected: PASS; `dist/index.html`, `dist/play.html`, and `dist/result.html` exis
 - [ ] **Step 6: Commit the scaffold**
 
 ```bash
-git add .gitignore package.json tsconfig.json vite.config.ts index.html play.html result.html src
+git add .gitignore package.json tsconfig.json vite.config.ts index.html play.html result.html public/images src
 git commit -m "chore: scaffold React multi-page typing game"
 ```
 
@@ -256,13 +261,13 @@ Expected: FAIL because `LobbyPage` does not exist.
 
 - [ ] **Step 3: Implement lobby form and leaderboard**
 
-Render labeled academic-number and nickname inputs, a submit button, game explanation, and Top 10 table. Trim input; require a non-empty academic number and 1–12 character nickname. On submit, disable controls, call `createGameSession`, save `{ sessionId, nickname, course, startedAtEpochMs: Date.now(), typoCount: 0 }`, then call `window.location.assign('/play.html')`.
+Render the shared CCSSAA logo header, labeled academic-number and nickname `Field`/`TextInput` controls, a design-system CTA button, game explanation with `BuildingColored`, and a Top 10 table. Trim input; require a non-empty academic number and 1–12 character nickname. On submit, disable controls, call `createGameSession`, save `{ sessionId, nickname, course, startedAtEpochMs: Date.now(), typoCount: 0 }`, then call `window.location.assign('/play.html')`.
 
 Load the leaderboard on mount. Render only `rank`, `nickname`, formatted elapsed time, and `typoCount`. If leaderboard loading fails, render `리더보드를 불러오지 못했습니다.` and keep game start usable.
 
 - [ ] **Step 4: Add 16:9 lobby styling**
 
-Use `LobbyPage.module.css` for a centered maximum-width layout, keyboard-friendly inputs, a high-contrast start button, and a readable Top 10 table. Do not include the academic number in any visible markup after form entry.
+Use CAUSW gray/blue/red/green tokens and the UI-design document's 16:9 layout. Add only game-specific CSS for the dark surface, high-contrast start CTA, and readable Top 10 table. Do not include the academic number in any visible markup after form entry.
 
 - [ ] **Step 5: Run page tests and build**
 
@@ -374,7 +379,7 @@ under `cau-typing-last-result`, clear the active game, and use `window.location.
 
 - [ ] **Step 4: Add robust public-PC styling**
 
-Use a large target label, 48px-or-larger input text, a visible focus ring, and a layout that remains within a 1280×720 viewport without scrolling. Set `inputMode="text"`, `autoComplete="off"`, `autoCapitalize="off"`, and `spellCheck={false}`.
+Use the shared logo header, `Time` icon, CAUSW blue focus and red error tokens, a 52px-or-larger target label, 48px-or-larger input text, a visible focus ring, and a layout that remains within a 1280×720 viewport without scrolling. Set `inputMode="text"`, `autoComplete="off"`, `autoCapitalize="off"`, and `spellCheck={false}`.
 
 - [ ] **Step 5: Run play tests and build**
 
@@ -417,7 +422,7 @@ Read and validate `LastResult` from `sessionStorage`. Redirect to `/` if it is a
 
 - [ ] **Step 4: Style the result page**
 
-Make the achieved rank the primary visual element, followed by elapsed time and typo count. Keep retry and home actions large enough for public-PC touch/mouse use.
+Make the achieved rank the primary visual element, followed by elapsed time and typo count. Use `Check` for saved completion, `ErrorColored` for save failure, and a design-system CTA button for retry. Keep actions large enough for public-PC touch/mouse use.
 
 - [ ] **Step 5: Run result tests and build**
 
