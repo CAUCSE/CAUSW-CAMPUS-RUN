@@ -17,7 +17,7 @@ const TOP_TEN = Array.from({ length: 10 }, (_, index) => ({
   typoCount: index % 3,
 }))
 
-test('accepts Korean IME composition commits without a final Hangul keydown', async ({ page }) => {
+test('accepts an Enter-submitted Korean attempt after countdown', async ({ page }) => {
   await installApiRoutes(page)
 
   await page.goto('/')
@@ -26,7 +26,8 @@ test('accepts Korean IME composition commits without a final Hangul keydown', as
   await page.getByRole('button', { name: '게임 시작' }).click()
 
   const placeInput = page.getByLabel('장소 입력')
-  await typePlaceByComposition(placeInput, '영신관')
+  await waitForStart(page)
+  await submitPlace(placeInput, '영신관')
 
   await expect(page.getByText('2 / 18')).toBeVisible()
   await expect(placeInput).toHaveValue('')
@@ -51,8 +52,9 @@ test('starts a game, completes every place, and shows the saved result', async (
   await expect(page).toHaveURL(/\/play\.html$/)
 
   const placeInput = page.getByLabel('장소 입력')
+  await waitForStart(page)
   for (const place of COURSE) {
-    await typePlaceCharacterByCharacter(placeInput, place)
+    await submitPlace(placeInput, place)
   }
 
   await expect(page).toHaveURL(/\/result\.html$/)
@@ -70,8 +72,9 @@ test('keeps the player on the game page and offers a retry when completion retur
   await expect(page).toHaveURL(/\/play\.html$/)
 
   const placeInput = page.getByLabel('장소 입력')
+  await waitForStart(page)
   for (const place of COURSE) {
-    await typePlaceCharacterByCharacter(placeInput, place)
+    await submitPlace(placeInput, place)
   }
 
   await expect(page).toHaveURL(/\/play\.html$/)
@@ -129,21 +132,11 @@ function assertNoStudentNumber(value: unknown) {
   expect(JSON.stringify(value)).not.toContain('studentNumber')
 }
 
-async function typePlaceCharacterByCharacter(input: ReturnType<Page['getByLabel']>, place: string) {
-  for (const character of place) {
-    await input.evaluate((element, key) => {
-      element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-    }, character)
-  }
+async function waitForStart(page: Page) {
+  await expect(page.getByLabel('장소 입력')).toBeEnabled({ timeout: 5_000 })
 }
 
-async function typePlaceByComposition(input: ReturnType<Page['getByLabel']>, place: string) {
-  for (const character of place) {
-    await input.evaluate((element, committedCharacter) => {
-      element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
-      element.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, data: committedCharacter, inputType: 'insertCompositionText', isComposing: true }))
-      element.dispatchEvent(new InputEvent('input', { bubbles: true, data: committedCharacter, inputType: 'insertCompositionText', isComposing: true }))
-      element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: committedCharacter }))
-    }, character)
-  }
+async function submitPlace(input: ReturnType<Page['getByLabel']>, place: string) {
+  await input.fill(place)
+  await input.press('Enter')
 }

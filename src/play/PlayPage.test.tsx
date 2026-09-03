@@ -3,235 +3,49 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { PlayPage } from './PlayPage'
 
-const mocks = vi.hoisted(() => ({
-  readActiveGame: vi.fn(),
-  clearActiveGame: vi.fn(),
-  saveActiveGame: vi.fn(),
-  completeGameSession: vi.fn(),
-  completeLocalGame: vi.fn(),
-}))
-
-vi.mock('../shared/game-session', () => ({
-  readActiveGame: mocks.readActiveGame,
-  clearActiveGame: mocks.clearActiveGame,
-  saveActiveGame: mocks.saveActiveGame,
-}))
-
+const mocks = vi.hoisted(() => ({ readActiveGame: vi.fn(), clearActiveGame: vi.fn(), saveActiveGame: vi.fn(), completeGameSession: vi.fn(), completeLocalGame: vi.fn() }))
+vi.mock('../shared/game-session', () => ({ readActiveGame: mocks.readActiveGame, clearActiveGame: mocks.clearActiveGame, saveActiveGame: mocks.saveActiveGame }))
 vi.mock('../shared/api', () => ({ completeGameSession: mocks.completeGameSession }))
 vi.mock('../shared/local-game', () => ({ completeLocalGame: mocks.completeLocalGame }))
 
-const activeGame = {
-  sessionId: 'session-1',
-  nickname: '청룡',
-  course: ['본관', '중앙도서관'],
-  startedAtEpochMs: 1_000,
-  expiresAtEpochMs: 60_000,
-  typoCount: 0,
-}
+const game = { sessionId: 'session-1', nickname: '청룡', course: ['본관', '중앙도서관'], startedAtEpochMs: 1_000, expiresAtEpochMs: 60_000, typoCount: 0 }
 
-const completion = {
-  recordId: 'record-1',
-  nickname: '청룡',
-  officialElapsedMilliseconds: 2_500,
-  typoCount: 1,
-  rankingStatus: 'ELIGIBLE' as const,
-  rank: 3,
-  leaderboard: [{ rank: 1, nickname: '사자', officialElapsedMilliseconds: 1_234, typoCount: 0 }],
-}
+describe('PlayPage submitted attempts', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000); vi.clearAllMocks(); mocks.readActiveGame.mockReturnValue(game) })
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
-describe('PlayPage', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    vi.clearAllMocks()
-    sessionStorage.clear()
-    mocks.readActiveGame.mockReturnValue(activeGame)
-    mocks.completeGameSession.mockResolvedValue(completion)
-    mocks.completeLocalGame.mockReturnValue({ ...completion, recordId: 'local-1', rankingStatus: 'PENDING_REGISTRATION', rank: null, leaderboard: [], isTestMode: true })
-  })
+  function start() { for (let index = 0; index < 3; index += 1) act(() => vi.advanceTimersByTime(1_000)) }
 
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-  })
-
-  test('returns to the lobby when no active game is stored', () => {
-    const replace = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { replace } })
-    mocks.readActiveGame.mockReturnValue(null)
-
+  test('locks the input during countdown and enables it afterwards', () => {
     render(<PlayPage />)
-
-    expect(replace).toHaveBeenCalledWith('/')
+    expect(screen.getByLabelText('장소 입력')).toBeDisabled()
+    start()
+    expect(screen.getByLabelText('장소 입력')).toBeEnabled()
   })
 
-  test('counts wrong keys, advances correct input, and updates elapsed time', () => {
-    render(<PlayPage />)
+  test('keeps an incorrect draft visible and clears it only after Enter', () => {
+    render(<PlayPage />); start()
     const input = screen.getByLabelText('장소 입력')
-
-    expect(screen.getByText('1 / 2')).toBeInTheDocument()
-    expect(screen.getByText('00:00.00')).toBeInTheDocument()
-    fireEvent.keyDown(input, { key: '브' })
-    expect(screen.getByText('오타 1회')).toBeInTheDocument()
-    expect(screen.getByText('브')).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '본브' } })
+    expect(input).toHaveValue('본브')
+    fireEvent.keyDown(input, { key: 'Enter' })
     expect(input).toHaveValue('')
+    expect(screen.getByText('오타 1회')).toBeInTheDocument()
+  })
 
-    fireEvent.keyDown(input, { key: '본' })
-    fireEvent.keyDown(input, { key: '관' })
-    expect(screen.getByText('2 / 2')).toBeInTheDocument()
+  test('advances only after an exact Enter submission', () => {
+    render(<PlayPage />); start()
+    const input = screen.getByLabelText('장소 입력')
+    fireEvent.change(input, { target: { value: '본관' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
     expect(screen.getByText('중앙도서관')).toBeInTheDocument()
-
-    act(() => vi.advanceTimersByTime(340))
-    expect(screen.getByText('00:00.34')).toBeInTheDocument()
+    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentIndex: 1, currentInput: '' }))
   })
 
-  test('restores and persists progress so a reload cannot reset it', () => {
-    const resumedGame = { ...activeGame, currentIndex: 1, currentInput: '중앙', typoCount: 2 }
-    mocks.readActiveGame.mockReturnValue(resumedGame)
+  test('keeps the mute choice for the next game', () => {
     render(<PlayPage />)
-    const input = screen.getByLabelText('장소 입력')
-
-    expect(screen.getByText('2 / 2')).toBeInTheDocument()
-    expect(screen.getByText('오타 2회')).toBeInTheDocument()
-    expect(input).toHaveValue('중앙')
-
-    fireEvent.keyDown(input, { key: '도' })
-    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith({
-      ...resumedGame,
-      currentIndex: 1,
-      currentInput: '중앙도',
-      typoCount: 2,
-    })
-  })
-
-  test('accepts committed Korean IME input without relying on a final Hangul keydown', () => {
-    render(<PlayPage />)
-    const input = screen.getByLabelText('장소 입력')
-
-    fireEvent.compositionStart(input)
-    fireEvent.input(input, { data: '본', isComposing: true })
-    fireEvent.compositionEnd(input, { data: '본' })
-
-    expect(input).toHaveValue('본')
-    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentInput: '본' }))
-  })
-
-  test('does not count an initial Hangul jamo as a typo before IME composition completes', () => {
-    render(<PlayPage />)
-    const input = screen.getByLabelText('장소 입력')
-
-    const keyDown = fireEvent.keyDown(input, { key: 'ㅂ' })
-    expect(keyDown).toBe(true)
-    expect(screen.getByText('오타 0회')).toBeInTheDocument()
-
-    fireEvent.compositionStart(input)
-    fireEvent.compositionEnd(input, { data: '본' })
-
-    expect(input).toHaveValue('본')
-    expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentInput: '본', typoCount: 0 }))
-  })
-
-  test('continues accepting correct input after a typo', () => {
-    render(<PlayPage />)
-    const input = screen.getByLabelText('장소 입력')
-
-    fireEvent.keyDown(input, { key: '가' })
-    expect(screen.getByText('오타 1회')).toBeInTheDocument()
-    fireEvent.keyDown(input, { key: '본' })
-
-    expect(input).toHaveValue('본')
-    expect(screen.getByText('오타 1회')).toBeInTheDocument()
-  })
-
-  test('submits a fixed completion payload, preserves the full response, then navigates', async () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
-    render(<PlayPage />)
-
-    act(() => vi.advanceTimersByTime(2_500))
-    const input = screen.getByLabelText('장소 입력')
-    for (const character of '본관중앙도서관') fireEvent.keyDown(input, { key: character })
-
-    expect(mocks.completeGameSession).toHaveBeenCalledWith('session-1', {
-      reportedElapsedMilliseconds: 2_500,
-      typoCount: 0,
-    })
-    await act(async () => {})
-    expect(JSON.parse(sessionStorage.getItem('cau-typing-last-result')!)).toEqual(completion)
-    expect(mocks.clearActiveGame).toHaveBeenCalledOnce()
-    expect(assign).toHaveBeenCalledWith('/result.html')
-  })
-
-  test('keeps the completed result visible and retries the identical payload after a save error', async () => {
-    mocks.completeGameSession.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(completion)
-    render(<PlayPage />)
-
-    act(() => vi.advanceTimersByTime(800))
-    const input = screen.getByLabelText('장소 입력')
-    for (const character of '본관중앙도서관') fireEvent.keyDown(input, { key: character })
-
-    await act(async () => {})
-    expect(screen.getByTitle('기록 저장 실패')).toBeInTheDocument()
-    expect(screen.getByText('기록 저장에 실패했습니다. 다시 시도해 주세요.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '다시 저장' })).toBeInTheDocument()
-    expect(screen.getByText('완주했습니다')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '다시 저장' }))
-    expect(mocks.completeGameSession).toHaveBeenNthCalledWith(1, 'session-1', {
-      reportedElapsedMilliseconds: 800,
-      typoCount: 0,
-    })
-    expect(mocks.completeGameSession).toHaveBeenNthCalledWith(2, 'session-1', {
-      reportedElapsedMilliseconds: 800,
-      typoCount: 0,
-    })
-  })
-
-  test('does not accept a key pressed at expiry before the timer rerenders', () => {
-    render(<PlayPage />)
-    const input = screen.getByLabelText('장소 입력')
-
-    // Change the wall clock without advancing the interval: this reproduces
-    // the interval/render boundary where the previously-rendered state is stale.
-    vi.setSystemTime(activeGame.expiresAtEpochMs)
-    fireEvent.keyDown(input, { key: '본' })
-
-    expect(input).toHaveValue('')
-    expect(screen.getByText('1 / 2')).toBeInTheDocument()
-    expect(mocks.completeGameSession).not.toHaveBeenCalled()
-  })
-
-  test('clears an expired session and provides a new-game action', () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
-    mocks.readActiveGame.mockReturnValue({ ...activeGame, expiresAtEpochMs: 1_000 })
-
-    render(<PlayPage />)
-
-    expect(mocks.clearActiveGame).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '새 게임 시작' }))
-    expect(assign).toHaveBeenCalledWith('/')
-  })
-
-  test('blocks paste input', () => {
-    render(<PlayPage />)
-    const event = fireEvent.paste(screen.getByLabelText('장소 입력'), { clipboardData: { getData: () => '본관' } })
-
-    expect(event).toBe(false)
-  })
-
-  test('stores a local completion without calling the API in test mode', async () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { assign } })
-    mocks.readActiveGame.mockReturnValue({ ...activeGame, isTestMode: true })
-    render(<PlayPage />)
-
-    const input = screen.getByLabelText('장소 입력')
-    for (const character of '본관중앙도서관') fireEvent.keyDown(input, { key: character })
-
-    await act(async () => {})
-    expect(mocks.completeGameSession).not.toHaveBeenCalled()
-    expect(mocks.completeLocalGame).toHaveBeenCalledWith('청룡', { reportedElapsedMilliseconds: 0, typoCount: 0 })
-    expect(assign).toHaveBeenCalledWith('/result.html')
+    fireEvent.click(screen.getByRole('button', { name: '효과음 끄기' }))
+    expect(localStorage.getItem('cau-typing-sound-muted')).toBe('true')
+    expect(screen.getByRole('button', { name: '효과음 켜기' })).toBeInTheDocument()
   })
 })

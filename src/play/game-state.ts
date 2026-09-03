@@ -3,8 +3,9 @@ export type GameState = {
   currentIndex: number
   currentInput: string
   typoCount: number
-  lastMistypedCharacter: string | null
 }
+
+export type Submission = 'success' | 'failure' | 'complete'
 
 export function createGameState(course: string[]): GameState {
   return {
@@ -12,48 +13,21 @@ export function createGameState(course: string[]): GameState {
     currentIndex: 0,
     currentInput: '',
     typoCount: 0,
-    lastMistypedCharacter: null,
   }
 }
 
-export function applyCharacter(state: GameState, character: string): GameState {
-  // Keyboard input is handled one character at a time. This also rejects paste.
-  if (character.length !== 1 || isCourseComplete(state)) return state
-
-  const target = state.course[state.currentIndex]
-  const expectedCharacter = target?.[state.currentInput.length]
-
-  if (character !== expectedCharacter) {
-    return {
-      ...state,
-      typoCount: state.typoCount + 1,
-      lastMistypedCharacter: character,
-    }
-  }
-
-  const nextInput = state.currentInput + character
-  if (nextInput.length === target.length) {
-    return {
-      ...state,
-      currentIndex: state.currentIndex + 1,
-      currentInput: '',
-      lastMistypedCharacter: null,
-    }
-  }
-
-  return {
-    ...state,
-    currentInput: nextInput,
-    lastMistypedCharacter: null,
-  }
+export function setCurrentInput(state: GameState, currentInput: string): GameState {
+  return isCourseComplete(state) ? state : { ...state, currentInput }
 }
 
-export function deleteCharacter(state: GameState): GameState {
-  return {
-    ...state,
-    currentInput: state.currentInput.slice(0, -1),
-    lastMistypedCharacter: null,
+export function submitCurrentInput(state: GameState): { state: GameState; submission: Submission } {
+  if (isCourseComplete(state)) return { state, submission: 'complete' }
+  if (state.currentInput !== state.course[state.currentIndex]) {
+    return { state: { ...state, currentInput: '', typoCount: state.typoCount + 1 }, submission: 'failure' }
   }
+
+  const nextState = { ...state, currentIndex: state.currentIndex + 1, currentInput: '' }
+  return { state: nextState, submission: isCourseComplete(nextState) ? 'complete' : 'success' }
 }
 
 export function isCourseComplete(state: GameState): boolean {

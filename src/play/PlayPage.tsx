@@ -1,13 +1,15 @@
 import { CTAButton } from '@causw/core'
 import { ErrorColored, Time } from '@causw/icons'
-import { ClipboardEvent, CompositionEvent, FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { ChangeEvent, ClipboardEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
 
 import { completeGameSession } from '../shared/api'
 import { formatDuration } from '../shared/format'
 import { clearActiveGame, readActiveGame, saveActiveGame } from '../shared/game-session'
 import { completeLocalGame } from '../shared/local-game'
 import type { ActiveGame, CompleteSessionRequest } from '../shared/types'
-import { applyCharacter, createGameState, deleteCharacter, type GameState, isCourseComplete } from './game-state'
+import { createGameState, setCurrentInput, submitCurrentInput, type GameState, isCourseComplete } from './game-state'
+import { playSound, readMuted, saveMuted } from './sound'
+import { useCountdown } from './useCountdown'
 import styles from './PlayPage.module.css'
 
 const LAST_RESULT_KEY = 'cau-typing-last-result'
@@ -16,16 +18,15 @@ const DEBUG_ENABLED = import.meta.env.VITE_TYPING_GAME_DEBUG === 'true'
 export function PlayPage() {
   const [activeGame] = useState(() => readActiveGame())
   const [gameState, setGameState] = useState(() => createResumedGameState(activeGame))
-  const [inputValue, setInputValue] = useState(() => createResumedGameState(activeGame).currentInput)
+  const [muted, setMuted] = useState(readMuted)
   const [now, setNow] = useState(() => Date.now())
   const [completionPayload, setCompletionPayload] = useState<CompleteSessionRequest | null>(null)
   const [saveError, setSaveError] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
-  const composingRef = useRef(false)
-  const compositionCommitRef = useRef<string | null>(null)
   const expiryClearedRef = useRef(false)
+  const { remaining, isPlaying } = useCountdown()
 
   useEffect(() => {
     debug('active-game', activeGame === null ? { found: false } : {
@@ -40,15 +41,17 @@ export function PlayPage() {
       return
     }
 
+    if (!isPlaying) return
     inputRef.current?.focus()
-    const interval = window.setInterval(() => setNow(Date.now()), 10)
+    const startedAt = Date.now()
+    const interval = window.setInterval(() => setNow(Date.now() - startedAt + game.startedAtEpochMs), 10)
     return () => window.clearInterval(interval)
-  }, [activeGame])
+  }, [activeGame, isPlaying])
 
   if (activeGame === null) return null
 
   const game = activeGame
-  const elapsedMilliseconds = Math.max(0, now - game.startedAtEpochMs)
+  const elapsedMilliseconds = isPlaying ? Math.max(0, now - game.startedAtEpochMs) : 0
   const isExpired = now >= game.expiresAtEpochMs
   const isComplete = isCourseComplete(gameState)
   const target = gameState.course[gameState.currentIndex]
@@ -97,7 +100,7 @@ export function PlayPage() {
   }
 
   function persistGameState(nextState: GameState) {
-    debug('game-state-persist', stateSnapshot(nextState))
+    debug('game-state-persist', { currentIndex: nextState.currentIndex, currentInput: nextState.currentInput, typoCount: nextState.typoCount })
     saveActiveGame({
       ...game,
       currentIndex: nextState.currentIndex,
@@ -106,115 +109,23 @@ export function PlayPage() {
     })
   }
 
-  function applyCommittedText(text: string) {
-    debug('committed-text-received', { text, ...stateSnapshot(gameState), isSaving, isExpired })
-    if (isComplete || isExpired || Date.now() >= game.expiresAtEpochMs || isSaving) {
-      if (Date.now() >= game.expiresAtEpochMs) {
-        expireSession()
-        setNow(Date.now())
-      }
-      return
-    }
-
-    let nextState = gameState
-    for (const character of text) {
-      if (character.length !== 1 || isCourseComplete(nextState)) break
-      nextState = applyCharacter(nextState, character)
-    }
-    if (nextState === gameState) return
-
-    debug('committed-text-applied', { text, before: stateSnapshot(gameState), after: stateSnapshot(nextState) })
-    setGameState(nextState)
-    setInputValue(nextState.currentInput)
-
-    // IME 조합(composition)은 React의 재렌더를 기다리지 않고 DOM에 직접 글자를
-    // 그려버릴 수 있다. 오타일 경우 nextState.currentInput이 이전 값과 동일해서
-    // React가 값이 안 바뀌었다고 보고 DOM 동기화를 건너뛸 수 있으므로,
-    // 여기서 즉시(같은 tick 안에서) 실제 <input> DOM 값을 강제로 되돌려서
-    // 오타 글자가 화면에 그려지는 것 자체를 막는다.
-    if (inputRef.current) {
-      inputRef.current.value = nextState.currentInput
-    }
-
-    persistGameState(nextState)
-    inputRef.current?.focus()
-    if (isCourseComplete(nextState)) complete(nextState.typoCount)
-  }
-
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    debug('keydown', {
-      key: event.key,
-      code: event.code,
-      isComposing: event.nativeEvent.isComposing,
-      composingRef: composingRef.current,
-      inputValue: event.currentTarget.value,
-    })
-    if (event.nativeEvent.isComposing || composingRef.current) return
-    if (isComplete || isExpired || Date.now() >= game.expiresAtEpochMs || isSaving) {
-      if (Date.now() >= game.expiresAtEpochMs) {
-        expireSession()
-        setNow(Date.now())
-      }
-      return
-    }
-
-    if (event.key === 'Backspace') {
-      event.preventDefault()
-      const nextState = deleteCharacter(gameState)
-      setGameState(nextState)
-      setInputValue(nextState.currentInput)
-      persistGameState(nextState)
-      inputRef.current?.focus()
-    } else if (isHangulJamo(event.key)) {
-      // Korean IMEs can emit the first jamo before compositionstart. Let the
-      // browser finish composing it; handleCompositionEnd receives the final syllable.
-      debug('keydown-hangul-jamo-deferred', { key: event.key })
-      return
-    } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      event.preventDefault()
-      applyCommittedText(event.key)
-    } else {
-      return
-    }
+    if (!isPlaying || event.nativeEvent.isComposing || event.key !== 'Enter' || isSaving) return
+    event.preventDefault()
+    const result = submitCurrentInput(gameState)
+    setGameState(result.state)
+    persistGameState(result.state)
+    playSound(result.submission === 'failure' ? 'failure' : 'success', muted)
+    if (result.submission === 'complete') complete(result.state.typoCount)
+    inputRef.current?.focus()
   }
 
-  function handleCompositionStart() {
-    debug('composition-start', { inputValue: inputRef.current?.value ?? '' })
-    composingRef.current = true
-  }
-
-  function handleCompositionEnd(event: CompositionEvent<HTMLInputElement>) {
-    composingRef.current = false
-    const committedText = event.data
-    debug('composition-end', { data: committedText, inputValue: event.currentTarget.value })
-    if (committedText.length === 0) return
-
-    compositionCommitRef.current = committedText
-    queueMicrotask(() => { compositionCommitRef.current = null })
-    applyCommittedText(committedText)
-  }
-
-  function handleInput(event: FormEvent<HTMLInputElement>) {
-    const committedText = (event.nativeEvent as InputEvent).data
-    debug('input', {
-      data: committedText,
-      inputType: (event.nativeEvent as InputEvent).inputType,
-      isComposing: (event.nativeEvent as InputEvent).isComposing,
-      composingRef: composingRef.current,
-      inputValue: event.currentTarget.value,
-    })
-    if (composingRef.current) return
-    if (typeof committedText === 'string' && committedText.length > 0) {
-      if (compositionCommitRef.current === committedText) return
-      applyCommittedText(committedText)
-      return
-    }
-    applyCommittedText(committedSuffix(event.currentTarget.value, gameState.currentInput))
-  }
-
-  function handleChange(event: FormEvent<HTMLInputElement>) {
-    debug('change', { inputValue: event.currentTarget.value, composingRef: composingRef.current })
-    setInputValue(event.currentTarget.value)
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    if (!isPlaying) return
+    const nextState = setCurrentInput(gameState, event.target.value)
+    setGameState(nextState)
+    persistGameState(nextState)
+    playSound('keypress', muted)
   }
 
   function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
@@ -222,6 +133,8 @@ export function PlayPage() {
     event.preventDefault()
     inputRef.current?.focus()
   }
+
+  function toggleMuted() { const next = !muted; setMuted(next); saveMuted(next) }
 
   function startNewGame() {
     clearActiveGame()
@@ -234,6 +147,7 @@ export function PlayPage() {
         <img className={styles.logo} src="/images/ccssaa-logo.png" alt="CAUSW" width="224" height="34" />
         <span className={styles.headerDivider} aria-hidden="true" />
         <span className={styles.wordmark}>CAU CAMPUS RUN</span>
+        <button className={styles.muteButton} type="button" onClick={toggleMuted} aria-pressed={muted} aria-label={muted ? '효과음 켜기' : '효과음 끄기'}>{muted ? '🔇' : '🔊'}</button>
       </header>
 
       <section className={styles.game} aria-label="캠퍼스 타이핑 게임">
@@ -262,24 +176,11 @@ export function PlayPage() {
               <p className={styles.eyebrow}>NEXT PLACE</p>
               <h1>{target}</h1>
               <label className={styles.inputLabel} htmlFor="place-input">장소 입력</label>
-              <input
-                ref={inputRef}
-                id="place-input"
-                className={styles.input}
-                value={inputValue}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-                onInput={handleInput}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
-                onPaste={handlePaste}
-                inputMode="text"
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                aria-describedby={gameState.lastMistypedCharacter ? 'typing-error' : undefined}
-              />
-              {gameState.lastMistypedCharacter && <p id="typing-error" className={styles.error} role="alert">{gameState.lastMistypedCharacter}</p>}
+              <div className={styles.inputWrap}>
+                <div className={styles.inputOverlay} aria-hidden="true">{[...gameState.currentInput].map((character, index) => <span key={index} className={character === target?.[index] ? undefined : styles.mistyped}>{character}</span>)}</div>
+                <input ref={inputRef} id="place-input" className={styles.input} value={gameState.currentInput} onChange={handleChange} onKeyDown={handleKeyDown} onPaste={handlePaste} disabled={!isPlaying} inputMode="text" autoComplete="off" autoCapitalize="off" spellCheck={false} />
+              </div>
+              <p className={styles.error} role="status">Enter를 눌러 제출하세요.</p>
             </>
           )}
 
@@ -293,6 +194,7 @@ export function PlayPage() {
             </div>
           )}
         </article>
+        {!isPlaying && <div className={styles.countdown} aria-live="assertive"><strong>{remaining > 0 ? remaining : 'START!'}</strong></div>}
       </section>
     </main>
   )
@@ -305,27 +207,9 @@ function createResumedGameState(game: ActiveGame | null): GameState {
   if (game === null || typeof currentIndex !== 'number' || !Number.isInteger(currentIndex) || currentIndex < 0 || currentIndex > game.course.length
     || typeof currentInput !== 'string' || !Number.isFinite(game.typoCount) || game.typoCount < 0) return initial
 
-  const target = game.course[currentIndex]
-  if ((target === undefined && currentInput !== '') || (target !== undefined && !target.startsWith(currentInput))) return initial
+  if (currentIndex === game.course.length && currentInput !== '') return initial
 
   return { ...initial, currentIndex, currentInput, typoCount: game.typoCount }
-}
-
-function committedSuffix(value: string, acceptedInput: string): string {
-  return value.startsWith(acceptedInput) ? value.slice(acceptedInput.length) : ''
-}
-
-function isHangulJamo(key: string): boolean {
-  return key.length === 1 && /[\u1100-\u11ff\u3130-\u318f]/u.test(key)
-}
-
-function stateSnapshot(state: GameState) {
-  return {
-    currentIndex: state.currentIndex,
-    currentInput: state.currentInput,
-    typoCount: state.typoCount,
-    lastMistypedCharacter: state.lastMistypedCharacter,
-  }
 }
 
 function debug(event: string, details: Record<string, unknown>): void {

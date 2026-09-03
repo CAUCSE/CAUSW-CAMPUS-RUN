@@ -4,6 +4,7 @@
 .headerDivider { width: 1px; height: 24px; background: #364153; }
 .wordmark, .eyebrow { font-weight: 700; letter-spacing: .12em; }
 .wordmark { color: #99a1af; font-size: 14px; }
+.muteButton { margin-left: auto; border: 0; color: #fff; background: transparent; font-size: 24px; cursor: pointer; }
 .game { display: grid; align-content: center; min-height: calc(100vh - clamp(48px, 8vw, 112px) - 34px); max-width: 960px; margin: 0 auto; }
 .statusBar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 0 auto 24px; width: min(100%, 760px); color: #d1d5dc; font-size: 20px; font-variant-numeric: tabular-nums; }
 .statusBar p { margin: 0; }
@@ -14,11 +15,17 @@
 .eyebrow { margin: 0 0 16px; color: #4f98ff; font-size: 13px; }
 h1 { min-height: 1.2em; margin: 0; color: #fff; font-size: clamp(52px, 7vw, 80px); font-weight: 750; line-height: 1.15; letter-spacing: -.04em; word-break: keep-all; }
 .inputLabel { display: block; margin: 44px 0 12px; color: #99a1af; font-size: 16px; text-align: left; }
-.input { width: 100%; min-height: 82px; box-sizing: border-box; padding: 12px 20px; border: 2px solid #4b5565; border-radius: 14px; outline: none; color: #fff; background: #101828; font: inherit; font-size: clamp(48px, 6vw, 64px); font-weight: 700; line-height: 1.1; text-align: center; caret-color: #4f98ff; }
+.inputWrap { position: relative; }
+.input, .inputOverlay { width: 100%; min-height: 82px; box-sizing: border-box; padding: 12px 20px; font: inherit; font-size: clamp(48px, 6vw, 64px); font-weight: 700; line-height: 1.1; text-align: center; }
+.input { position: relative; border: 2px solid #4b5565; border-radius: 14px; outline: none; color: transparent; background: #101828; caret-color: #4f98ff; }
+.inputOverlay { position: absolute; inset: 0; z-index: 1; display: block; overflow: hidden; pointer-events: none; color: #fff; white-space: nowrap; }
+.mistyped { color: #fd5c5f; }
 .input:focus-visible { border-color: #4f98ff; box-shadow: 0 0 0 4px rgb(79 152 255 / 35%); }
 .error { min-height: 28px; margin: 12px 0 0; color: #fd5c5f; font-size: 24px; font-weight: 700; }
 .completedDescription { margin: 22px 0 0; color: #99a1af; font-size: 20px; }
 .newGameButton { margin-top: 28px; }
 .saveError { display: grid; justify-items: center; gap: 18px; margin: 36px auto 0; color: #fd5c5f; font-size: 18px; }
 .saveError p { margin: 0; }
+.countdown { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: #fff; background: rgb(16 24 40 / 90%); font-size: clamp(100px, 18vw, 240px); animation: countdown-pop 1s ease-in-out; }
+@keyframes countdown-pop { from { transform: scale(.8); opacity: .2; } to { transform: scale(1); opacity: 1; } }
 @media (max-width: 640px) { .page { padding: 20px; } .header { gap: 12px; } .logo { width: 164px; height: auto; } .wordmark { font-size: 11px; } .game { min-height: calc(100vh - 74px); } .statusBar { gap: 12px; font-size: 15px; } .timer svg { width: 18px; } .typingCard { min-height: 360px; padding: 32px 20px; border-radius: 18px; } }
