@@ -10,6 +10,7 @@
 - 구현 계획: `docs/superpowers/plans/2026-09-02-cau-campus-typing-game.md`
 - 디자인 시스템: `https://github.com/CAUCSE/CAUSW-frontend-design-system` (확인 커밋 `2e344b279c89e574cc575e86e86f5b0bb5b6aeaf`)
 - CCSSAA 로고 원본: `https://github.com/CAUCSE/CAUSW-frontend-v3/tree/develop/apps/web/public/images/ccssaa-logo.png`
+- 상호작용 설계: `docs/superpowers/specs/2026-09-03-cau-campus-typing-interaction-design.md`
 
 ## 브랜드와 로고
 
@@ -76,7 +77,7 @@
 
 헤더는 로고·워드마크를 작게 유지하고, 우측에는 `Time` 아이콘과 경과 타이머를 둔다. 중앙에는 현재 순번, 장소명, 입력창을 세로 정렬한다. 화면 하단에는 오타 수와 즉시 피드백만 둔다.
 
-입력창은 CAUSW `TextInput`을 기반으로 하되 게임 전용 CSS에서 48px 글자 크기와 최소 72px 높이를 준다. 기본·포커스 상태는 블루, 오타 상태는 레드로 표시한다. 키보드 포커스는 화면 전환 및 모든 키 입력 뒤에도 입력창으로 반환한다.
+플레이 시작 전에는 중앙 카운트다운 오버레이에 `3 → 2 → 1 → START!`를 표시하고 입력창과 타이머를 잠근다. 시작 뒤에는 CAUSW `TextInput`을 기반으로 한 게임 전용 입력칸에 입력값을 유지한다. 텍스트 표시 레이어는 정답 위치를 기본색, 오답 위치를 레드로 표시한다. Enter 제출 실패 시 입력값 전체를 비운다. 헤더에는 효과음 음소거 상태를 바꾸는 아이콘 버튼을 둔다. 키보드 포커스는 카운트다운 완료·제출 뒤에도 입력창으로 반환한다.
 
 ### 결과 화면 (`/result.html`)
 
