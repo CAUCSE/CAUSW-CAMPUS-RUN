@@ -126,6 +126,16 @@ export function PlayPage() {
     debug('committed-text-applied', { text, before: stateSnapshot(gameState), after: stateSnapshot(nextState) })
     setGameState(nextState)
     setInputValue(nextState.currentInput)
+
+    // IME 조합(composition)은 React의 재렌더를 기다리지 않고 DOM에 직접 글자를
+    // 그려버릴 수 있다. 오타일 경우 nextState.currentInput이 이전 값과 동일해서
+    // React가 값이 안 바뀌었다고 보고 DOM 동기화를 건너뛸 수 있으므로,
+    // 여기서 즉시(같은 tick 안에서) 실제 <input> DOM 값을 강제로 되돌려서
+    // 오타 글자가 화면에 그려지는 것 자체를 막는다.
+    if (inputRef.current) {
+      inputRef.current.value = nextState.currentInput
+    }
+
     persistGameState(nextState)
     inputRef.current?.focus()
     if (isCourseComplete(nextState)) complete(nextState.typoCount)
