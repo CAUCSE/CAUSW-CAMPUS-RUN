@@ -1,5 +1,6 @@
 const MUTE_KEY = 'cau-typing-sound-muted'
 export type SoundName = 'keypress' | 'success' | 'failure' | 'countdown'
+let audioContext: AudioContext | null = null
 
 export function readMuted(): boolean { return localStorage.getItem(MUTE_KEY) === 'true' }
 export function saveMuted(muted: boolean): void { localStorage.setItem(MUTE_KEY, String(muted)) }
@@ -9,7 +10,9 @@ export function playSound(name: SoundName, muted: boolean): void {
   try {
     const Context = window.AudioContext
     if (!Context) return
-    const context = new Context()
+    if (audioContext === null || audioContext.state === 'closed') audioContext = new Context()
+    const context = audioContext
+    if (context.state === 'suspended') void context.resume().catch(() => undefined)
     const oscillator = context.createOscillator()
     const gain = context.createGain()
     const [frequency, duration] = name === 'success' ? [880, 0.12] : name === 'failure' ? [160, 0.16] : name === 'countdown' ? [520, 0.08] : [420, 0.035]

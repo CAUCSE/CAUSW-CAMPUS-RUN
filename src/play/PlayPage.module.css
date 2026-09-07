@@ -6,10 +6,24 @@
 .wordmark { color: #99a1af; font-size: 14px; }
 .muteButton { margin-left: auto; border: 0; color: #fff; background: transparent; font-size: 24px; cursor: pointer; }
 .game { display: grid; align-content: center; min-height: calc(100vh - clamp(48px, 8vw, 112px) - 34px); max-width: 960px; margin: 0 auto; }
-.statusBar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 0 auto 24px; width: min(100%, 760px); color: #d1d5dc; font-size: 20px; font-variant-numeric: tabular-nums; }
-.statusBar p { margin: 0; }
+.statusPanel { display: grid; grid-template-columns: minmax(220px, 1fr) 1fr; align-items: center; gap: 28px; width: min(100%, 760px); box-sizing: border-box; margin: 0 auto 24px; padding: 18px 28px; border: 1px solid #3f5960; border-radius: 22px; color: #d1d5dc; background: linear-gradient(135deg, rgb(17 37 39 / 96%), rgb(18 36 34 / 88%)); box-shadow: 0 18px 54px rgb(0 0 0 / 18%); font-size: 20px; font-variant-numeric: tabular-nums; }
+.statusPanel p { margin: 0; }
+.speedometer { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 116px; border-right: 1px solid #3f5960; }
+.gauge { display: block; width: 148px; overflow: visible; }
+.gaugeTrack, .gaugeValue { fill: none; stroke-width: 7; stroke-linecap: round; }
+.gaugeTrack { stroke: #405254; }
+.gaugeValue { stroke: #1688f8; transition: stroke-dasharray .35s ease; }
+.gaugeNeedle { stroke: #f5fbf9; stroke-width: 3; stroke-linecap: round; transform-origin: 60px 60px; transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
+.gaugeHub { fill: #f5fbf9; }
+.speedValue { display: flex; align-items: baseline; gap: 5px; margin-top: 2px; color: #f5fbf9; line-height: 1; }
+.speedValue strong { font-size: 34px; }
+.speedValue span { color: #a7b5b2; font-size: 12px; font-weight: 700; }
+.statusDetails { display: grid; gap: 13px; }
+.statusSummary { display: flex; justify-content: space-between; gap: 16px; font-size: 16px; }
 .progress { color: #4f98ff; font-weight: 750; }
-.timer { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.timer { display: grid; gap: 5px; }
+.timer > span { color: #8ca09b; font-size: 12px; font-weight: 700; }
+.timer > strong { display: flex; align-items: center; gap: 7px; color: #f5fbf9; font-size: 24px; }
 .typos { color: #fd5c5f; }
 .typingCard { min-height: 390px; box-sizing: border-box; padding: clamp(32px, 6vw, 64px); border: 1px solid #364153; border-radius: 24px; background: #1e2939; box-shadow: 0 24px 80px rgb(0 0 0 / 20%); text-align: center; }
 .eyebrow { margin: 0 0 16px; color: #4f98ff; font-size: 13px; }
@@ -28,4 +42,5 @@ h1 { min-height: 1.2em; margin: 0; color: #fff; font-size: clamp(52px, 7vw, 80px
 .saveError p { margin: 0; }
 .countdown { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: #fff; background: rgb(16 24 40 / 90%); font-size: clamp(100px, 18vw, 240px); animation: countdown-pop 1s ease-in-out; }
 @keyframes countdown-pop { from { transform: scale(.8); opacity: .2; } to { transform: scale(1); opacity: 1; } }
-@media (max-width: 640px) { .page { padding: 20px; } .header { gap: 12px; } .logo { width: 164px; height: auto; } .wordmark { font-size: 11px; } .game { min-height: calc(100vh - 74px); } .statusBar { gap: 12px; font-size: 15px; } .timer svg { width: 18px; } .typingCard { min-height: 360px; padding: 32px 20px; border-radius: 18px; } }
+@media (max-width: 640px) { .page { padding: 20px; } .header { gap: 12px; } .logo { width: 164px; height: auto; } .wordmark { font-size: 11px; } .game { min-height: calc(100vh - 74px); } .statusPanel { grid-template-columns: 1fr 1fr; gap: 16px; padding: 14px 16px; } .speedometer { min-width: 0; min-height: 100px; } .gauge { width: 120px; } .speedValue strong { font-size: 28px; } .timer > strong { font-size: 17px; } .timer svg { width: 17px; } .statusSummary { font-size: 13px; } .typingCard { min-height: 360px; padding: 32px 20px; border-radius: 18px; } }
+@media (prefers-reduced-motion: reduce) { .gaugeValue, .gaugeNeedle { transition: none; } }

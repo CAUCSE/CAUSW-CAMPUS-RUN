@@ -7,7 +7,7 @@ import { formatDuration } from '../shared/format'
 import { clearActiveGame, readActiveGame, saveActiveGame } from '../shared/game-session'
 import { completeLocalGame } from '../shared/local-game'
 import type { ActiveGame, CompleteSessionRequest } from '../shared/types'
-import { createGameState, setCurrentInput, submitCurrentInput, type GameState, isCourseComplete } from './game-state'
+import { calculateTypingSpeed, countCorrectCharacters, createGameState, MAX_TYPING_SPEED, setCurrentInput, submitCurrentInput, type GameState, isCourseComplete } from './game-state'
 import { playSound, readMuted, saveMuted } from './sound'
 import { useCountdown } from './useCountdown'
 import styles from './PlayPage.module.css'
@@ -26,6 +26,7 @@ export function PlayPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
   const expiryClearedRef = useRef(false)
+  const typingBaselineRef = useRef(countCorrectCharacters(gameState))
   const { remaining, isPlaying } = useCountdown()
 
   useEffect(() => {
@@ -55,6 +56,8 @@ export function PlayPage() {
   const isExpired = now >= game.expiresAtEpochMs
   const isComplete = isCourseComplete(gameState)
   const target = gameState.course[gameState.currentIndex]
+  const typingSpeed = calculateTypingSpeed(gameState, elapsedMilliseconds, typingBaselineRef.current)
+  const gaugeRatio = Math.min(Math.max(typingSpeed / MAX_TYPING_SPEED, 0), 1)
 
   function expireSession() {
     if (expiryClearedRef.current) return
@@ -151,10 +154,23 @@ export function PlayPage() {
       </header>
 
       <section className={styles.game} aria-label="캠퍼스 타이핑 게임">
-        <div className={styles.statusBar}>
-          <p className={styles.progress}>{Math.min(gameState.currentIndex + 1, gameState.course.length)} / {gameState.course.length}</p>
-          <p className={styles.timer}><Time size={24} aria-hidden="true" /> {formatDuration(elapsedMilliseconds)}</p>
-          <p className={styles.typos}>오타 {gameState.typoCount}회</p>
+        <div className={styles.statusPanel}>
+          <div className={styles.speedometer} aria-label="현재 타수">
+            <svg className={styles.gauge} viewBox="0 0 120 72" aria-hidden="true">
+              <path className={styles.gaugeTrack} pathLength="100" d="M 12 60 A 48 48 0 0 1 108 60" />
+              <path className={styles.gaugeValue} pathLength="100" strokeDasharray={`${gaugeRatio * 100} 100`} d="M 12 60 A 48 48 0 0 1 108 60" />
+              <line className={styles.gaugeNeedle} x1="60" y1="60" x2="60" y2="24" style={{ transform: `rotate(${gaugeRatio * 180 - 90}deg)` }} />
+              <circle className={styles.gaugeHub} cx="60" cy="60" r="4" />
+            </svg>
+            <div className={styles.speedValue}><strong>{typingSpeed}</strong><span>타/분</span></div>
+          </div>
+          <div className={styles.statusDetails}>
+            <p className={styles.timer}><span>진행시간</span><strong><Time size={20} aria-hidden="true" /> {formatDuration(elapsedMilliseconds)}</strong></p>
+            <div className={styles.statusSummary}>
+              <p className={styles.progress}>{Math.min(gameState.currentIndex + 1, gameState.course.length)} / {gameState.course.length}</p>
+              <p className={styles.typos}>오타 {gameState.typoCount}회</p>
+            </div>
+          </div>
         </div>
 
         <article className={styles.typingCard}>

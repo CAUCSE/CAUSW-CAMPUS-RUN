@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { createGameState, isCourseComplete, setCurrentInput, submitCurrentInput } from './game-state'
+import { calculateTypingSpeed, createGameState, isCourseComplete, setCurrentInput, submitCurrentInput } from './game-state'
 
 describe('submitted-attempt game state', () => {
   test('keeps a draft unchanged until it is submitted', () => {
@@ -25,5 +25,21 @@ describe('submitted-attempt game state', () => {
     const result = submitCurrentInput(setCurrentInput(createGameState(['A']), 'A'))
     expect(result.submission).toBe('complete')
     expect(isCourseComplete(result.state)).toBe(true)
+  })
+
+  test('starts at zero and stabilizes the first correct character at 20 typing speed', () => {
+    const empty = createGameState(['본관'])
+    const oneCorrectCharacter = setCurrentInput(empty, '본')
+
+    expect(calculateTypingSpeed(empty, 0)).toBe(0)
+    expect(calculateTypingSpeed(oneCorrectCharacter, 0)).toBe(20)
+    expect(calculateTypingSpeed(oneCorrectCharacter, 120_000)).toBe(20)
+  })
+
+  test('caps typing speed at 700', () => {
+    const target = '가'.repeat(40)
+    const state = setCurrentInput(createGameState([target]), target)
+
+    expect(calculateTypingSpeed(state, 3_000)).toBe(700)
   })
 })

@@ -42,6 +42,37 @@ describe('PlayPage submitted attempts', () => {
     expect(mocks.saveActiveGame).toHaveBeenLastCalledWith(expect.objectContaining({ currentIndex: 1, currentInput: '' }))
   })
 
+  test('updates typing speed from correct characters while typing', () => {
+    render(<PlayPage />); start()
+    act(() => vi.advanceTimersByTime(3_000))
+    const input = screen.getByLabelText('장소 입력')
+
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
+    fireEvent.change(input, { target: { value: '본' } })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    fireEvent.change(input, { target: { value: '본브' } })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
+
+    fireEvent.change(input, { target: { value: '본관' } })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^40타\/분$/)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^40타\/분$/)
+
+    act(() => vi.advanceTimersByTime(3_000))
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+  })
+
+  test('starts typing speed at zero when resuming saved progress', () => {
+    mocks.readActiveGame.mockReturnValue({ ...game, currentIndex: 1, currentInput: '', typoCount: 0 })
+    render(<PlayPage />); start()
+
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
+    fireEvent.change(screen.getByLabelText('장소 입력'), { target: { value: '중' } })
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+  })
+
   test('keeps the mute choice for the next game', () => {
     render(<PlayPage />)
     fireEvent.click(screen.getByRole('button', { name: '효과음 끄기' }))
