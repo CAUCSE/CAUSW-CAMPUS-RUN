@@ -5,6 +5,8 @@ import type { ServerConfig } from './config.js'
 import type { SessionRecordRepository } from './database/repositories.js'
 import { HttpError, toErrorEnvelope } from './http/errors.js'
 import { SlidingWindowRateLimiter } from './http/rate-limit.js'
+import { registerLeaderboardRoutes } from './routes/leaderboard.js'
+import { registerSessionRoutes } from './routes/sessions.js'
 
 export interface AppOptions {
   readonly config: ServerConfig
@@ -63,6 +65,15 @@ export function buildApp(options: AppOptions): FastifyInstance {
     message: 'Request completed successfully.',
     data: { status: 'ok' },
   }))
+
+  const publicRouteOptions = {
+    config: options.config,
+    repository: options.repository,
+    now: options.now ?? Date.now,
+    rateLimiter: options.rateLimiter ?? new SlidingWindowRateLimiter(),
+  }
+  registerSessionRoutes(app, publicRouteOptions)
+  registerLeaderboardRoutes(app, publicRouteOptions)
 
   return app
 }

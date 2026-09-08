@@ -64,26 +64,22 @@ describe('Fastify application boundary', () => {
     })
   })
 
-  test('leaves the session route available for the Task 6 handler', async () => {
+  test('reserves the public session route for its validation handler', async () => {
     const app = createApp()
-
-    app.post('/api/v2/campus-typing/sessions', async () => ({
-      code: 'SUCCESS',
-      message: 'Task 6 handler.',
-      data: null,
-    }))
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/v2/campus-typing/sessions',
+      payload: { email: 'private@example.com' },
     })
 
-    expect(response.statusCode).toBe(200)
+    expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({
-      code: 'SUCCESS',
-      message: 'Task 6 handler.',
+      code: 'TYPING_INVALID_INPUT',
+      message: expect.any(String),
       data: null,
     })
+    expect(response.body).not.toContain('private@example.com')
   })
 
   test('limits request bodies to 16 KiB with the stable error envelope', async () => {
