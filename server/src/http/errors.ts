@@ -65,10 +65,16 @@ export function invalidInput(): { statusCode: number; body: ErrorEnvelope } {
 function isFastifyInputError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const candidate = error as { code?: unknown; statusCode?: unknown; validation?: unknown }
+  const contentTypeInputErrorCodes = new Set([
+    'FST_ERR_CTP_BODY_TOO_LARGE',
+    'FST_ERR_CTP_EMPTY_JSON_BODY',
+    'FST_ERR_CTP_INVALID_CONTENT_LENGTH',
+    'FST_ERR_CTP_INVALID_JSON_BODY',
+    'FST_ERR_CTP_INVALID_MEDIA_TYPE',
+  ])
   return Boolean(
     candidate.validation
     || candidate.statusCode === 400
-    || candidate.code === 'FST_ERR_CTP_BODY_TOO_LARGE'
-    || candidate.code === 'FST_ERR_CTP_INVALID_JSON_BODY',
+    || (typeof candidate.code === 'string' && contentTypeInputErrorCodes.has(candidate.code)),
   )
 }

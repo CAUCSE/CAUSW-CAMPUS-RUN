@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { buildApp } from '../src/app.js'
 import type { ServerConfig } from '../src/config.js'
 import { CAMPUS_COURSE } from '../src/course.js'
+import { PRIVACY_CONSENT_VERSION, THIRD_PARTY_CONSENT_VERSION } from '../src/consent.js'
 import { runMigrations } from '../src/database/migrations.js'
 import { createRepository } from '../src/database/repositories.js'
 
@@ -87,14 +88,28 @@ describe('public campus typing API', () => {
     expect(created.body).not.toContain('Winner@Example.com')
     expect(created.body).not.toContain('010-1234-5678')
     expect(created.body).not.toContain('20240001')
-    const stored = db.prepare('SELECT student_hash, email_ciphertext, phone_ciphertext FROM game_sessions').get() as {
+    const stored = db.prepare(`
+      SELECT student_hash, email_ciphertext, phone_ciphertext,
+        privacy_consent_version, third_party_consent_version, consented_at_ms, course_json
+      FROM game_sessions
+    `).get() as {
       student_hash: string
       email_ciphertext: string
       phone_ciphertext: string
+      privacy_consent_version: string
+      third_party_consent_version: string
+      consented_at_ms: number
+      course_json: string
     }
     expect(stored.student_hash).not.toContain('20240001')
     expect(stored.email_ciphertext).not.toContain('winner@example.com')
     expect(stored.phone_ciphertext).not.toContain('01012345678')
+    expect(stored).toMatchObject({
+      privacy_consent_version: PRIVACY_CONSENT_VERSION,
+      third_party_consent_version: THIRD_PARTY_CONSENT_VERSION,
+      consented_at_ms: 1_700_000_000_000,
+      course_json: JSON.stringify(CAMPUS_COURSE),
+    })
 
     advance(18_000)
     const completed = await app.inject({
@@ -133,7 +148,6 @@ describe('public campus typing API', () => {
     const response = await createSession(app, {
       email: 'private@example.com',
       phoneNumber: '011-1234-5678',
-      privacyConsent: false,
     })
 
     expect(response.statusCode).toBe(400)
@@ -145,6 +159,41 @@ describe('public campus typing API', () => {
     expect(response.body).not.toContain('private@example.com')
     expect(response.body).not.toContain('011-1234-5678')
     expect(db.prepare('SELECT count(*) AS count FROM game_sessions').get()).toEqual({ count: 0 })
+  })
+
+  test.each([
+    ['privacy consent', { privacyConsent: false }],
+    ['third-party consent', { thirdPartyConsent: false }],
+  ])('requires explicit %s before creating a session', async (_name, consent) => {
+    const { app, db } = createApp()
+    const response = await createSession(app, consent)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'TYPING_INVALID_INPUT',
+      message: expect.any(String),
+      data: null,
+    })
+    expect(db.prepare('SELECT count(*) AS count FROM game_sessions').get()).toEqual({ count: 0 })
+  })
+
+  test('maps an unsupported request media type to the stable private-safe input error', async () => {
+    const { app } = createApp()
+    const response = await app.inject({
+      method: 'POST',
+      url: sessionsUrl,
+      headers: { 'content-type': 'application/xml' },
+      payload: '<session><email>private@example.com</email></session>',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      code: 'TYPING_INVALID_INPUT',
+      message: expect.any(String),
+      data: null,
+    })
+    expect(response.body).not.toContain('private@example.com')
+    expect(response.body).not.toContain('FST_ERR_CTP_INVALID_MEDIA_TYPE')
   })
 
   test('uses server time for plausibility, expiration, and replay protection', async () => {
