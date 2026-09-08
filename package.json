@@ -11,7 +11,11 @@
     "build": "tsc -b && vite build",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "server:dev": "npm --prefix server run dev",
+    "server:test": "npm --prefix server test -- --run",
+    "server:build": "npm --prefix server run build",
+    "verify": "npm test -- --run && npm run server:test && npm run build && npm run server:build"
   },
   "dependencies": {
     "@causw/core": "^0.0.32",
