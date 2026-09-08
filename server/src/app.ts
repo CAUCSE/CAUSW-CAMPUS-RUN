@@ -5,6 +5,7 @@ import type { ServerConfig } from './config.js'
 import type { SessionRecordRepository } from './database/repositories.js'
 import { HttpError, toErrorEnvelope } from './http/errors.js'
 import { SlidingWindowRateLimiter } from './http/rate-limit.js'
+import { registerAdminRoutes } from './routes/admin.js'
 import { registerLeaderboardRoutes } from './routes/leaderboard.js'
 import { registerSessionRoutes } from './routes/sessions.js'
 
@@ -74,6 +75,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   }
   registerSessionRoutes(app, publicRouteOptions)
   registerLeaderboardRoutes(app, publicRouteOptions)
+  registerAdminRoutes(app, publicRouteOptions)
 
   return app
 }
