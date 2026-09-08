@@ -59,13 +59,26 @@ npm --prefix server start
 
 `server/.env`와 실제 비밀값은 저장소·CSV·티켓·채팅에 넣지 않습니다. `ALLOWED_ORIGINS`에는 와일드카드가 아닌 정확한 브라우저 Origin만 쉼표로 구분해 설정합니다. `PORT=0`은 OS가 사용 가능한 포트를 선택하게 하므로 테스트나 운영 플랫폼의 동적 포트 할당에 사용할 수 있습니다.
 
+운영 시작 전 아래 설정을 확인합니다. `ALLOWED_ORIGINS`, `STUDENT_NUMBER_HMAC_KEY`, `EMAIL_ENCRYPTION_KEY`, `ADMIN_TOKEN`은 반드시 설정해야 합니다. 나머지는 기본값을 명시적으로 덮어쓸 때만 설정합니다.
+
+| 변수 | 필요 여부 | 기본값 / 제약 |
+| --- | --- | --- |
+| `HOST` | 선택 | `127.0.0.1` |
+| `PORT` | 선택 | `3001` (동적 포트는 `0`) |
+| `DATABASE_PATH` | 선택 | `data/cau-typing.sqlite` (`npm --prefix server start` 기준 `server/data/...`) |
+| `ALLOWED_ORIGINS` | 필수 | 쉼표 구분 정확한 HTTP(S) Origin |
+| `STUDENT_NUMBER_HMAC_KEY` | 필수 | UTF-8 32바이트 이상 |
+| `EMAIL_ENCRYPTION_KEY` | 필수 | Base64로 표현한 정확히 32바이트 AES 키 |
+| `ADMIN_TOKEN` | 필수 | UTF-8 32바이트 이상 Bearer 토큰 |
+| `TRUST_PROXY` | 선택 | `0`; 검토된 프록시 홉 수만 설정 |
+
 ### Public internet and reverse proxy
 
 이 서버는 TLS 인증서 발급이나 인터넷 공개를 스스로 처리하지 않습니다. 운영자는 TLS 종료와 공개 경로를 검토된 리버스 프록시에서 관리하고, 서버는 보통 사설 인터페이스에 바인딩합니다. 프록시를 정확히 한 홉만 신뢰하는 경우에만 `TRUST_PROXY=1`로 설정하고, 직접 노출하거나 프록시 체인이 불명확하면 `0`을 유지합니다. 방화벽은 프록시만 서버 포트에 접근하도록 제한하고, 관리자 API는 별도 네트워크·접근 제어를 추가로 적용합니다.
 
 ### Backups, retention, and protected operations
 
-SQLite 파일은 서비스가 중지된 상태에서 보관하거나 SQLite의 일관된 백업 기능으로 복제합니다. 예를 들어 SQLite CLI가 설치된 운영 환경에서는 다음처럼 백업합니다.
+SQLite WAL 모드에서는 `server/data/cau-typing.sqlite` 본체, `server/data/cau-typing.sqlite-wal`, `server/data/cau-typing.sqlite-shm`이 한 상태를 이룹니다. 실행 중에는 본체만 복사하지 말고 SQLite의 일관된 백업 기능을 사용하며, 중지 상태에서 파일을 보관할 경우에는 세 파일을 함께 취급합니다. 예를 들어 SQLite CLI가 설치된 운영 환경에서는 다음처럼 백업합니다.
 
 ```bash
 mkdir -p server/backups
@@ -77,20 +90,23 @@ sqlite3 server/data/cau-typing.sqlite ".backup 'server/backups/cau-typing-$(date
 CSV 내보내기와 전체 삭제는 `ADMIN_TOKEN` Bearer 인증이 필요하며, CSV에는 연락처 정보가 포함됩니다. 토큰은 셸의 안전한 환경변수나 비밀 관리자에서만 주입하고, 다운로드 파일도 접근 제한·암호화·보관 기한을 적용합니다.
 
 ```bash
-# ADMIN_TOKEN은 명령 기록에 남기지 않도록 안전한 비밀 주입 방식으로 설정한다.
-curl --fail --show-error \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -o campus-typing-records.csv \
-  https://typing.example/api/v2/admin/campus-typing/records.csv
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:3001/api/v2/admin/campus-typing/records.csv --output campus-typing-records.csv
 
-# 되돌릴 수 없는 전체 파기: 먼저 검증된 백업과 승인 절차를 갖춘다.
-curl --fail --show-error --request DELETE \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' \
+curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   --data '{"confirmation":"DELETE ALL CAMPUS TYPING DATA"}' \
-  https://typing.example/api/v2/admin/campus-typing/records
+  http://127.0.0.1:3001/api/v2/admin/campus-typing/records
 ```
+
+두 번째 요청은 되돌릴 수 없는 전체 파기입니다. 실행 전 검증된 백업과 승인 절차를 확인하고, `ADMIN_TOKEN`은 명령 기록에 남기지 않도록 안전한 비밀 주입 방식으로 설정합니다.
 
 ### 개인정보 및 발송 대행 주의
 
-SendB 같은 문자 발송사가 계약에 따라 학교의 지시만 받아 발송을 대행하고 자체 목적 사용을 하지 않는다면 일반적으로 처리위탁으로 검토할 여지가 있습니다. 반대로 수신자 정보가 그 사업자의 독자적 목적 또는 별도 수익·마케팅 목적으로 전달되면 제3자 제공으로 볼 수 있어 별도 고지·동의가 필요할 수 있습니다. 실제 계약, 데이터 흐름, 보관·재위탁 조건에 따라 결론이 달라지므로 공개 전 개인정보 담당 부서와 법률 자문으로 분류·동의 문구를 확정해야 합니다.
+공개 전에 SendB 계약이 ㈜윈큐브마케팅을 처리 수탁자(processor)로 보는지 제3자 제공 수령자(third-party recipient)로 보는지 반드시 확인합니다. 계약, 데이터 흐름, 보관·재위탁 조건에 따라 실제 분류가 달라질 수 있으므로 개인정보 담당 부서와 법률 자문으로 동의 문구를 확정합니다. 고지 문구가 바뀌면 동의 버전을 수정·증가시키고 새 버전을 배포해야 합니다.
+
+### Operator handoff checklist
+
+- [ ] `server/.env` 또는 배포 비밀 저장소에 필수 네 값을 설정했고, 키와 SQLite 백업을 함께 접근 제한 저장소에 보관했다.
+- [ ] `npm --prefix server run build` 후 `npm --prefix server start`로 시작해, 시작 시 마이그레이션이 적용되는 것을 확인했다.
+- [ ] 운영 프록시의 TLS, 접근 제어, `ALLOWED_ORIGINS`, `TRUST_PROXY`를 실제 네트워크 경계와 맞췄다.
+- [ ] CSV 접근 권한·보관 기한과 전체 삭제 승인자를 지정했고, 복구 절차를 시험했다.
+- [ ] ㈜윈큐브마케팅의 법적 역할과 동의 고지/버전을 출시 전에 확정했다.

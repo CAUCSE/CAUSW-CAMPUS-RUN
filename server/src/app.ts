@@ -14,6 +14,7 @@ export interface AppOptions {
   readonly repository: SessionRecordRepository
   readonly now?: () => number
   readonly rateLimiter?: SlidingWindowRateLimiter
+  readonly logStream?: { write(message: string): void }
 }
 
 export function buildApp(options: AppOptions): FastifyInstance {
@@ -31,6 +32,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         ],
         remove: true,
       },
+      ...(options.logStream === undefined ? {} : { stream: options.logStream }),
     },
   })
 
