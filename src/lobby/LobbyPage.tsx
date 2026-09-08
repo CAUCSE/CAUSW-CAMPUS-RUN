@@ -11,14 +11,24 @@ import type { LeaderboardEntry } from '../shared/types'
 import styles from './LobbyPage.module.css'
 
 const STUDENT_NUMBER_PATTERN = /^\d{8}(\d{2})?$/
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/
+const PHONE_NUMBER_PATTERN = /^010\d{8}$/
 
 export function LobbyPage() {
   const apiEnabled = isApiEnabled()
   const studentNumberId = useId()
   const nicknameId = useId()
+  const emailId = useId()
+  const phoneNumberId = useId()
+  const privacyConsentId = useId()
+  const thirdPartyConsentId = useId()
   const studentNumberInput = useRef<HTMLInputElement>(null)
   const [studentNumber, setStudentNumber] = useState('')
   const [nickname, setNickname] = useState('')
+  const [email, setEmail] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [privacyConsent, setPrivacyConsent] = useState(false)
+  const [thirdPartyConsent, setThirdPartyConsent] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [leaderboardError, setLeaderboardError] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -26,9 +36,13 @@ export function LobbyPage() {
 
   const normalizedStudentNumber = studentNumber.trim()
   const normalizedNickname = nickname.trim()
+  const normalizedEmail = email.trim().toLowerCase()
+  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '')
   const isStudentNumberValid = STUDENT_NUMBER_PATTERN.test(normalizedStudentNumber)
   const isNicknameValid = normalizedNickname.length >= 1 && normalizedNickname.length <= 12
-  const canStart = isStudentNumberValid && isNicknameValid && !isSubmitting
+  const isEmailValid = EMAIL_PATTERN.test(normalizedEmail) && normalizedEmail.length <= 254
+  const isPhoneNumberValid = PHONE_NUMBER_PATTERN.test(normalizedPhoneNumber)
+  const canStart = isStudentNumberValid && isNicknameValid && isEmailValid && isPhoneNumberValid && privacyConsent && thirdPartyConsent && !isSubmitting
 
   useEffect(() => {
     studentNumberInput.current?.focus()
@@ -48,7 +62,14 @@ export function LobbyPage() {
     setSubmitError('')
     try {
       const response = apiEnabled
-        ? await createGameSession({ studentNumber: normalizedStudentNumber, nickname: normalizedNickname })
+        ? await createGameSession({
+          studentNumber: normalizedStudentNumber,
+          nickname: normalizedNickname,
+          email: normalizedEmail,
+          phoneNumber: normalizedPhoneNumber,
+          privacyConsent: true,
+          thirdPartyConsent: true,
+        })
         : createLocalGameSession()
       saveActiveGame({
         sessionId: response.sessionId,
@@ -122,6 +143,72 @@ export function LobbyPage() {
               )}
             </Field>
 
+            <Field disabled={isSubmitting} error={email.length > 0 && !isEmailValid}>
+              <Field.Label htmlFor={emailId}>이메일</Field.Label>
+              <TextInput
+                id={emailId}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                inputMode="email"
+                placeholder="winner@example.com"
+                disabled={isSubmitting}
+                aria-describedby={email.length > 0 && !isEmailValid ? `${emailId}-error` : undefined}
+              />
+              {email.length > 0 && !isEmailValid && (
+                <Field.ErrorDescription id={`${emailId}-error`}>올바른 이메일 주소를 입력해 주세요.</Field.ErrorDescription>
+              )}
+            </Field>
+
+            <Field disabled={isSubmitting} error={phoneNumber.length > 0 && !isPhoneNumberValid}>
+              <Field.Label htmlFor={phoneNumberId}>휴대전화번호</Field.Label>
+              <TextInput
+                id={phoneNumberId}
+                value={formatPhoneNumber(phoneNumber)}
+                onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, '').slice(0, 11))}
+                autoComplete="tel"
+                inputMode="numeric"
+                placeholder="010-1234-5678"
+                disabled={isSubmitting}
+                aria-describedby={phoneNumber.length > 0 && !isPhoneNumberValid ? `${phoneNumberId}-error` : undefined}
+              />
+              {phoneNumber.length > 0 && !isPhoneNumberValid && (
+                <Field.ErrorDescription id={`${phoneNumberId}-error`}>010으로 시작하는 11자리 번호를 입력해 주세요.</Field.ErrorDescription>
+              )}
+            </Field>
+
+            <div className={styles.consents} aria-label="개인정보 동의">
+              <details className={styles.disclosure}>
+                <summary>개인정보 수집·이용 동의 전문</summary>
+                <div>
+                  <p>ICT 위원회는 경품 추첨 및 경품 발송을 위해 개인정보를 수집·이용합니다.</p>
+                  <p>수집 항목: 성명, 학번, 이메일 주소, 휴대전화번호, 경품 정보</p>
+                  <p>보유·이용 기간: 경품 발송 완료 후 30일</p>
+                  <p>동의를 거부할 권리가 있으나, 거부하면 경품 참여가 불가능합니다.</p>
+                </div>
+              </details>
+              <label className={styles.consentLabel} htmlFor={privacyConsentId}>
+                <input id={privacyConsentId} type="checkbox" checked={privacyConsent} onChange={(event) => setPrivacyConsent(event.target.checked)} disabled={isSubmitting} />
+                개인정보 수집·이용에 동의합니다. (필수)
+              </label>
+
+              <details className={styles.disclosure}>
+                <summary>개인정보 제공 동의 전문</summary>
+                <div>
+                  <p>ICT 위원회는 경품 발송을 위해 아래와 같이 개인정보를 제공합니다.</p>
+                  <p>제공받는 자: ㈜윈큐브마케팅(센드비)</p>
+                  <p>제공 목적: 경품 추첨 및 경품 발송</p>
+                  <p>제공 항목: 성명, 학번, 이메일 주소, 휴대전화번호, 경품 정보</p>
+                  <p>보유·이용 기간: 경품 발송 완료 후 30일</p>
+                  <p>동의를 거부할 권리가 있으나, 거부하면 경품 참여가 불가능합니다.</p>
+                </div>
+              </details>
+              <label className={styles.consentLabel} htmlFor={thirdPartyConsentId}>
+                <input id={thirdPartyConsentId} type="checkbox" checked={thirdPartyConsent} onChange={(event) => setThirdPartyConsent(event.target.checked)} disabled={isSubmitting} />
+                센드비를 통한 경품 발송을 위한 개인정보 제공에 동의합니다. (필수)
+              </label>
+            </div>
+
             {submitError && <p className={styles.submitError} role="alert">{submitError}</p>}
             <CTAButton className={styles.startButton} type="submit" disabled={!canStart} fullWidth>
               {isSubmitting ? '게임 준비 중...' : '게임 시작'}
@@ -155,4 +242,11 @@ export function LobbyPage() {
       </section>
     </main>
   )
+}
+
+function formatPhoneNumber(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
 }

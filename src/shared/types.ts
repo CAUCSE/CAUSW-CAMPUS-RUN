@@ -1,4 +1,11 @@
-export type CreateSessionRequest = { studentNumber: string; nickname: string }
+export type CreateSessionRequest = {
+  studentNumber: string
+  nickname: string
+  email: string
+  phoneNumber: string
+  privacyConsent: true
+  thirdPartyConsent: true
+}
 
 export type CreateSessionResponse = {
   sessionId: string

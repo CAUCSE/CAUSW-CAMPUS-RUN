@@ -14,6 +14,13 @@ h1 { font-size: clamp(30px, 3vw, 44px); line-height: 1.15; }
 h2 { font-size: 32px; }
 .introduction p:last-child { margin: 12px 0 0; color: #99a1af; font-size: 16px; line-height: 1.6; }
 .form { display: grid; gap: 20px; }
+.consents { display: grid; gap: 10px; }
+.disclosure { border: 1px solid #364153; border-radius: 10px; color: #cbd5e1; font-size: 14px; line-height: 1.5; }
+.disclosure summary { padding: 11px 14px; cursor: pointer; color: #fff; font-weight: 700; }
+.disclosure div { padding: 0 14px 12px; }
+.disclosure p { margin: 8px 0; }
+.consentLabel { display: flex; align-items: flex-start; gap: 9px; color: #fff; font-size: 14px; line-height: 1.45; cursor: pointer; }
+.consentLabel input { flex: 0 0 auto; width: 18px; height: 18px; margin: 1px 0 0; accent-color: #4f98ff; }
 .startButton { min-height: 64px; margin-top: 8px; font-size: 22px; font-weight: 700; }
 .submitError, .leaderboardError { margin: 0; color: #fd5c5f; font-size: 15px; }
 .testMode { margin: 22px 0 0; color: #f7c948; font-size: 15px; }
@@ -34,7 +41,10 @@ h2 { font-size: 32px; }
   .startCard { padding: 26px 32px; }
   .introduction { margin-bottom: 20px; }
   .introduction p:last-child { margin-top: 8px; font-size: 14px; line-height: 1.4; }
-  .form { gap: 12px; }
+  .form { gap: 10px; }
+  .disclosure summary { padding: 8px 10px; }
+  .disclosure div { padding: 0 10px 8px; }
+  .disclosure p, .consentLabel { font-size: 12px; }
   .startButton { min-height: 52px; margin-top: 0; font-size: 19px; }
   .leaderboard { padding: 22px 28px; }
   .leaderboardHeading { padding-bottom: 12px; }

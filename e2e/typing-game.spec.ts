@@ -21,9 +21,7 @@ test('accepts an Enter-submitted Korean attempt after countdown', async ({ page 
   await installApiRoutes(page)
 
   await page.goto('/')
-  await page.getByLabel('학번').fill('20241234')
-  await page.getByLabel('별명').fill('조합러너')
-  await page.getByRole('button', { name: '게임 시작' }).click()
+  await startGame(page, '조합러너')
 
   const placeInput = page.getByLabel('장소 입력')
   await waitForStart(page)
@@ -46,9 +44,7 @@ test('starts a game, completes every place, and shows the saved result', async (
   await installApiRoutes(page)
 
   await page.goto('/')
-  await page.getByLabel('학번').fill('20241234')
-  await page.getByLabel('별명').fill('캠퍼스러너')
-  await page.getByRole('button', { name: '게임 시작' }).click()
+  await startGame(page, '캠퍼스러너')
   await expect(page).toHaveURL(/\/play\.html$/)
 
   const placeInput = page.getByLabel('장소 입력')
@@ -66,9 +62,7 @@ test('keeps the player on the game page and offers a retry when completion retur
   await installApiRoutes(page, { completionStatus: 503 })
 
   await page.goto('/')
-  await page.getByLabel('학번').fill('20241234')
-  await page.getByLabel('별명').fill('재시도러너')
-  await page.getByRole('button', { name: '게임 시작' }).click()
+  await startGame(page, '재시도러너')
   await expect(page).toHaveURL(/\/play\.html$/)
 
   const placeInput = page.getByLabel('장소 입력')
@@ -91,7 +85,14 @@ async function installApiRoutes(page: Page, options: { completionStatus?: number
 
   await page.route('**/api/v2/campus-typing/sessions', async (route) => {
     expect(route.request().method()).toBe('POST')
-    expect(await route.request().postDataJSON()).toEqual({ studentNumber: '20241234', nickname: expect.any(String) })
+    expect(await route.request().postDataJSON()).toEqual({
+      studentNumber: '20241234',
+      nickname: expect.any(String),
+      email: 'winner@example.com',
+      phoneNumber: '01012345678',
+      privacyConsent: true,
+      thirdPartyConsent: true,
+    })
     await route.fulfill({
       json: {
         data: {
@@ -130,6 +131,16 @@ async function installApiRoutes(page: Page, options: { completionStatus?: number
 
 function assertNoStudentNumber(value: unknown) {
   expect(JSON.stringify(value)).not.toContain('studentNumber')
+}
+
+async function startGame(page: Page, nickname: string) {
+  await page.getByLabel('학번').fill('20241234')
+  await page.getByLabel('별명').fill(nickname)
+  await page.getByLabel('이메일').fill('winner@example.com')
+  await page.getByLabel('휴대전화번호').fill('01012345678')
+  await page.getByRole('checkbox', { name: '개인정보 수집·이용에 동의합니다. (필수)' }).check()
+  await page.getByRole('checkbox', { name: '센드비를 통한 경품 발송을 위한 개인정보 제공에 동의합니다. (필수)' }).check()
+  await page.getByRole('button', { name: '게임 시작' }).click()
 }
 
 async function waitForStart(page: Page) {

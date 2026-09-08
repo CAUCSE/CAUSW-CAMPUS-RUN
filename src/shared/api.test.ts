@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { ApiError, completeGameSession, createGameSession, getLeaderboard } from './api'
+import type { CreateSessionRequest } from './types'
 
 const session = {
   sessionId: 'session-1',
@@ -10,6 +11,15 @@ const session = {
   ],
   startedAt: '2026-09-02T14:00:00+09:00',
   expiresAt: '2026-09-02T14:10:00+09:00',
+}
+
+const createSessionRequest: CreateSessionRequest = {
+  studentNumber: '20240001',
+  nickname: '청룡',
+  email: 'winner@example.com',
+  phoneNumber: '01012345678',
+  privacyConsent: true,
+  thirdPartyConsent: true,
 }
 
 afterEach(() => {
@@ -27,13 +37,13 @@ describe('campus typing API client', () => {
     const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ code: 'OK', message: '성공', data: session }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createGameSession({ studentNumber: '20240001', nickname: '청룡' })).resolves.toEqual(session)
+    await expect(createGameSession(createSessionRequest)).resolves.toEqual(session)
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.test/api/v2/campus-typing/sessions',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentNumber: '20240001', nickname: '청룡' }),
+        body: JSON.stringify(createSessionRequest),
       }),
     )
   })
@@ -67,7 +77,7 @@ describe('campus typing API client', () => {
   test('uses a server error message for non-success responses', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockJsonResponse({ message: '학번을 확인할 수 없습니다.' }, false, 400)))
 
-    await expect(createGameSession({ studentNumber: '20240001', nickname: '청룡' }))
+    await expect(createGameSession(createSessionRequest))
       .rejects.toMatchObject({ name: 'ApiError', message: '학번을 확인할 수 없습니다.' })
   })
 
@@ -81,7 +91,7 @@ describe('campus typing API client', () => {
   test('rejects malformed successful responses', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockJsonResponse({ code: 'OK', message: '성공', data: { course: [] } })))
 
-    await expect(createGameSession({ studentNumber: '20240001', nickname: '청룡' })).rejects.toBeInstanceOf(ApiError)
+    await expect(createGameSession(createSessionRequest)).rejects.toBeInstanceOf(ApiError)
   })
 
   test('accepts the 18 specified campus places in a different order', async () => {
@@ -92,7 +102,7 @@ describe('campus typing API client', () => {
       data: { ...session, course },
     })))
 
-    await expect(createGameSession({ studentNumber: '20240001', nickname: '청룡' }))
+    await expect(createGameSession(createSessionRequest))
       .resolves.toEqual({ ...session, course })
   })
 
@@ -106,6 +116,6 @@ describe('campus typing API client', () => {
       data: { ...session, course },
     })))
 
-    await expect(createGameSession({ studentNumber: '20240001', nickname: '청룡' })).rejects.toBeInstanceOf(ApiError)
+    await expect(createGameSession(createSessionRequest)).rejects.toBeInstanceOf(ApiError)
   })
 })
