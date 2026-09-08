@@ -348,6 +348,13 @@ export class SessionRecordRepository {
     return rows.map(toRankedRecord)
   }
 
+  getStudentRank(studentHash: string): number | null {
+    const row = this.db.prepare(`${bestRecordsCte}
+      SELECT rank FROM ranked_best WHERE student_hash = ?
+    `).get(studentHash) as { rank: number } | undefined
+    return row?.rank ?? null
+  }
+
   getBestRecordsWithContacts(): BestRecordWithContacts[] {
     const rows = this.db.prepare(`${bestRecordsCte}
       SELECT

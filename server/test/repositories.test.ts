@@ -141,6 +141,24 @@ describe('session and record repository', () => {
       .toThrow('SESSION_COMPLETED')
   })
 
+  test('rolls back the completed session update when record insertion fails', () => {
+    const { db, repository } = createTestRepository()
+    const session = repository.createSession(newSession())
+    db.exec(`
+      CREATE TRIGGER refuse_record_insert
+      BEFORE INSERT ON game_records
+      BEGIN
+        SELECT RAISE(ABORT, 'record insert refused');
+      END
+    `)
+
+    expect(() => repository.completeSession(session.id, 10_000, 0, session.startedAtMs + 10_000))
+      .toThrow('record insert refused')
+    expect(db.prepare('SELECT completed_at_ms FROM game_sessions WHERE id = ?').get(session.id))
+      .toEqual({ completed_at_ms: null })
+    expect(db.prepare('SELECT count(*) AS count FROM game_records').get()).toEqual({ count: 0 })
+  })
+
   test('keeps every attempt but ranks one best record per student', () => {
     const { db, repository } = createTestRepository()
     createAndComplete(repository, { studentHash: 'same', elapsedMs: 20_000, typoCount: 2 })
@@ -152,6 +170,24 @@ describe('session and record repository', () => {
       { rank: 2, nickname: '청룡', officialElapsedMilliseconds: 19_000, typoCount: 0 },
     ])
     expect(db.prepare('SELECT count(*) AS count FROM game_records').get()).toEqual({ count: 3 })
+  })
+
+  test('returns an exact current-student rank outside the bounded public leaderboard', () => {
+    const { repository } = createTestRepository()
+    for (let rank = 1; rank <= 11; rank += 1) {
+      createAndComplete(repository, {
+        studentHash: `faster-${rank}`,
+        nickname: `선수${rank}`,
+        elapsedMs: 10_000 + rank,
+      })
+    }
+    createAndComplete(repository, {
+      studentHash: 'current-student', nickname: '현재선수', elapsedMs: 20_000,
+    })
+
+    expect(repository.getLeaderboard(10)).toHaveLength(10)
+    expect(repository.getStudentRank('current-student')).toBe(12)
+    expect(repository.getStudentRank('missing-student')).toBeNull()
   })
 
   test('orders equal durations by typo count then completion time', () => {
