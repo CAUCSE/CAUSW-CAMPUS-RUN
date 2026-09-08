@@ -87,6 +87,35 @@ sqlite3 server/data/cau-typing.sqlite ".backup 'server/backups/cau-typing-$(date
 
 백업은 암호화된 접근 제한 저장소에 보관하고, 복구 절차를 정기적으로 시험합니다. 보관 기간은 대회 목적·학내 정책·동의 고지에 맞춰 정한 뒤, 만료 시 아래 전체 삭제 절차를 사용합니다. 현재 API에는 자동 보존 정책이나 선택적 삭제 기능이 없으므로, 필요한 기간이 끝나면 운영자가 백업 여부를 확인하고 수동으로 파기해야 합니다.
 
+### SQLite restore procedure
+
+복구는 데이터를 되돌리는 작업이므로, 먼저 현재 데이터를 별도 백업하고 서비스가 완전히 중지된 상태에서만 실행합니다. 아래는 기본 `DATABASE_PATH=data/cau-typing.sqlite`와 위 `.backup` 방식의 산출물을 복구하는 절차입니다. systemd 예시의 단위명은 실제 배포 단위명으로 바꿉니다. 수동으로 `npm --prefix server start`를 실행했다면 해당 프로세스를 `Ctrl-C` 또는 운영 중인 프로세스 관리자에서 먼저 중지합니다.
+
+```bash
+# 1. 쓰기를 멈춘다. 실제 systemd 단위명으로 바꾼다.
+sudo systemctl stop cau-typing
+
+# 2. 복구 전 현재 상태를 별도로 보관한다. 실패했을 때 되돌릴 수 있는 마지막 기회다.
+mkdir -p server/backups
+sqlite3 server/data/cau-typing.sqlite ".backup 'server/backups/cau-typing-pre-restore-$(date +%F-%H%M%S).sqlite'"
+
+# 3. 검증한 .backup 파일을 기본 DATABASE_PATH로 복원한다.
+cp server/backups/cau-typing-YYYY-MM-DD.sqlite server/data/cau-typing.sqlite
+
+# 4. .backup은 단일 일관된 DB 파일이므로 이전 DB의 stale WAL/SHM은 함께 복원하지 않는다.
+rm -f server/data/cau-typing.sqlite-wal server/data/cau-typing.sqlite-shm
+
+# 5. 서비스를 다시 시작한다. 마이그레이션은 시작 시 다시 확인된다.
+sudo systemctl start cau-typing
+```
+
+파일 세 개를 함께 만든 별도의 정합성 보장 스냅샷을 복원하는 경우에만 `cau-typing.sqlite`, `cau-typing.sqlite-wal`, `cau-typing.sqlite-shm`을 같은 스냅샷에서 모두 교체합니다. 본체만 교체하고 이전 WAL/SHM을 남기면 이전 데이터가 다시 적용되거나 DB가 손상될 수 있습니다. 재시작 뒤 별도 터미널에서 health와 데이터 상태를 확인합니다.
+
+```bash
+curl --fail http://127.0.0.1:3001/health
+sqlite3 server/data/cau-typing.sqlite 'SELECT count(*) AS sessions FROM game_sessions; SELECT count(*) AS records FROM game_records;'
+```
+
 CSV 내보내기와 전체 삭제는 `ADMIN_TOKEN` Bearer 인증이 필요하며, CSV에는 연락처 정보가 포함됩니다. 토큰은 셸의 안전한 환경변수나 비밀 관리자에서만 주입하고, 다운로드 파일도 접근 제한·암호화·보관 기한을 적용합니다.
 
 ```bash

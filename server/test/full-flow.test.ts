@@ -111,6 +111,26 @@ describe('standalone leaderboard server full flow', () => {
       expect(sqliteContents).not.toContain(privateValue)
     }
 
+    for (const authorization of [undefined, 'Bearer wrong-admin-token']) {
+      const unauthorizedCsv = await app.inject({
+        method: 'GET',
+        url: csvUrl,
+        headers: authorization === undefined ? {} : { authorization },
+      })
+      expect(unauthorizedCsv.statusCode).toBe(401)
+      expect(unauthorizedCsv.body).not.toContain('winner@example.com')
+    }
+
+    const unauthorizedDelete = await app.inject({
+      method: 'DELETE',
+      url: deleteUrl,
+      headers: { authorization: 'Bearer wrong-admin-token' },
+      payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' },
+    })
+    expect(unauthorizedDelete.statusCode).toBe(401)
+    expect(db.prepare('SELECT count(*) AS count FROM game_sessions').get()).toEqual({ count: 3 })
+    expect(db.prepare('SELECT count(*) AS count FROM game_records').get()).toEqual({ count: 3 })
+
     const csvResponse = await app.inject({
       method: 'GET',
       url: csvUrl,
