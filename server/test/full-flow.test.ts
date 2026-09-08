@@ -164,6 +164,10 @@ describe('standalone leaderboard server full flow', () => {
 
     const logOutput = logged.join('')
     expect(logOutput).toContain('reqId')
+    // Actual successful completion URLs must be reduced to the route template.
+    for (const session of sessionRows as Array<{ id: string }>) {
+      expect(logOutput).not.toContain(session.id)
+    }
     for (const privateValue of [
       '20240001',
       '20240002',

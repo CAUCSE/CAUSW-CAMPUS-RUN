@@ -72,7 +72,7 @@ function seedWinningRecord(repository: SessionRecordRepository, overrides: {
 afterEach(async () => {
   await Promise.all(apps.splice(0).map(async ({ app, db }) => {
     await app.close()
-    db.close()
+    if (db.open) db.close()
   }))
 })
 
@@ -228,5 +228,49 @@ describe('admin records API', () => {
 
     now += 60_001
     expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(200)
+  })
+
+  test.each([undefined, 'Bearer wrong-token'])('counts unauthenticated requests (%s) across both admin routes before database work', async (authorization) => {
+    let now = Date.UTC(2026, 8, 8, 12)
+    const { app, db, repository } = createApp(() => now)
+    seedWinningRecord(repository)
+    db.prepare("UPDATE game_sessions SET email_ciphertext = 'not-valid-ciphertext'").run()
+    const headers = authorization === undefined ? {} : { authorization }
+    for (let index = 0; index < 10; index += 1) {
+      const response = await app.inject(index % 2 === 0
+        ? { method: 'GET', url: csvUrl, headers }
+        : { method: 'DELETE', url: deleteUrl, headers, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })
+      expect(response.statusCode).toBe(401)
+    }
+    expect(repository.getLeaderboard(10)).toHaveLength(1)
+    // Closing the DB makes accidental reads/decrypt/delete observable as 500.
+    db.close()
+    expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(429)
+    expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers: { authorization: `Bearer ${adminToken}` }, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })).statusCode).toBe(429)
+    now += 59_999
+    expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(429)
+    now += 1
+    expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(401)
+    expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })).statusCode).toBe(401)
+  })
+
+  test('shares the admin limit across authenticated CSV, invalid confirmation and parser failures', async () => {
+    const { app, repository } = createApp()
+    seedWinningRecord(repository)
+    const headers = { authorization: `Bearer ${adminToken}` }
+    for (let index = 0; index < 2; index += 1) {
+      expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(200)
+      for (const invalid of [
+        { payload: { confirmation: 'DELETE' } },
+        { headers: { ...headers, 'content-type': 'application/json' }, payload: '{' },
+        { headers: { ...headers, 'content-type': 'application/xml' }, payload: '<delete />' },
+        { payload: { padding: 'x'.repeat(16 * 1024) } },
+      ]) {
+        expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers, ...invalid })).statusCode).toBe(400)
+      }
+    }
+    expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(429)
+    expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })).statusCode).toBe(429)
+    expect(repository.getLeaderboard(10)).toHaveLength(1)
   })
 })

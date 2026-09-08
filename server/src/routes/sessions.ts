@@ -6,6 +6,7 @@ import type { ServerConfig } from '../config.js'
 import type { SessionRecordRepository } from '../database/repositories.js'
 import { HttpError } from '../http/errors.js'
 import { SlidingWindowRateLimiter } from '../http/rate-limit.js'
+import { ipRateLimit } from '../http/ip-rate-limit.js'
 import { encryptContact } from '../security/contact-encryption.js'
 import { dailyIpHash, studentHash } from '../security/identity.js'
 import { CompleteSessionInputSchema, CreateSessionInputSchema } from '../validation.js'
@@ -33,13 +34,14 @@ function rejectWhenLimited(
 }
 
 export function registerSessionRoutes(app: FastifyInstance, options: SessionRoutesOptions): void {
-  app.post('/api/v2/campus-typing/sessions', async (request) => {
+  app.post('/api/v2/campus-typing/sessions', {
+    onRequest: ipRateLimit(options, 'session:create:ip', 10),
+  }, async (request) => {
     const input = CreateSessionInputSchema.parse(request.body)
     const nowMs = options.now()
     const ipHash = dailyIpHash(request.ip, nowMs, options.config.studentHmacKey)
     const normalizedStudentHash = studentHash(input.studentNumber, options.config.studentHmacKey)
 
-    rejectWhenLimited(options.rateLimiter, 'session:create:ip', ipHash, 10, nowMs)
     rejectWhenLimited(options.rateLimiter, 'session:create:student', normalizedStudentHash, 3, nowMs)
 
     const sessionId = randomUUID()
@@ -71,11 +73,11 @@ export function registerSessionRoutes(app: FastifyInstance, options: SessionRout
     }
   })
 
-  app.post('/api/v2/campus-typing/sessions/:sessionId/completion', async (request) => {
+  app.post('/api/v2/campus-typing/sessions/:sessionId/completion', {
+    onRequest: ipRateLimit(options, 'session:completion:ip', 30),
+  }, async (request) => {
     const input = CompleteSessionInputSchema.parse(request.body)
     const nowMs = options.now()
-    const ipHash = dailyIpHash(request.ip, nowMs, options.config.studentHmacKey)
-    rejectWhenLimited(options.rateLimiter, 'session:completion:ip', ipHash, 30, nowMs)
 
     const sessionId = (request.params as { sessionId: string }).sessionId
     const record = options.repository.completeSession(

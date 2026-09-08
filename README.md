@@ -50,6 +50,30 @@ npm --prefix server install
 npm --prefix server run dev
 ```
 
+프론트도 독립 서버에 연결해야 기록이 저장됩니다. 루트 `.env.example`의 기본값은 로컬 테스트 모드(`false`)와 예시 API 주소이므로, 루트 `.env.local`에서 다음 세 값을 설정합니다. `VITE_` 변수는 브라우저에 공개되므로 서버 비밀값을 넣지 않습니다.
+
+```dotenv
+VITE_TYPING_GAME_API_ENABLED=true
+VITE_TYPING_GAME_API_BASE_URL=http://127.0.0.1:3001
+VITE_TYPING_GAME_DEBUG=false
+```
+
+`server/.env`는 `HOST=127.0.0.1`, `PORT=3001`, `ALLOWED_ORIGINS=http://localhost:5173`으로 설정합니다(`server/.env.example`과 동일). 별도 터미널에서 아래 명령을 실행하고 정확히 `http://localhost:5173`으로 접속합니다.
+
+```bash
+npm run dev -- --host localhost --port 5173 --strictPort
+```
+
+브라우저 주소가 `http://127.0.0.1:5173`이면 다른 Origin입니다. 이 주소를 사용할 경우 Vite의 `--host`를 `127.0.0.1`로 바꾸고 `ALLOWED_ORIGINS`에도 해당 Origin을 명시합니다. 두 주소를 모두 허용하려면 `http://localhost:5173,http://127.0.0.1:5173`으로 설정합니다. 서버 환경변수 변경 후에는 서버를 재시작하고, `VITE_` 변경 후에는 Vite를 재시작합니다. 빌드한 프론트에는 환경변수가 빌드 시 반영되므로 다시 빌드·배포해야 합니다.
+
+로컬 연결 smoke 확인은 별도의 빈 테스트 DB와 가짜 참가자 정보로 수행합니다.
+
+1. `curl --fail http://127.0.0.1:3001/health`가 성공하는지 확인합니다.
+2. 브라우저 개발자 도구의 Network를 열고 로비를 새로고침합니다. 리더보드 GET이 `http://127.0.0.1:3001/api/v2/campus-typing/leaderboard`로 전송되고, 테스트 모드 안내가 사라졌는지 확인합니다. 공개 목록은 쿼리와 관계없이 상위 10건만 반환합니다.
+3. 가짜 연락처와 학번을 입력하고 각 동의 전문을 펼쳐 확인한 뒤 두 체크박스를 선택합니다. 게임 시작 시 JSON POST의 OPTIONS preflight가 성공하고 `Access-Control-Allow-Origin: http://localhost:5173`이 반환되는지 확인합니다. 세션 POST가 200이어야 합니다.
+4. 5초 이상 10분 이내에 코스를 완주하고 completion POST 200, 결과 순위와 로비 리더보드 반영을 확인합니다. 같은 학번으로 재도전해 최고 기록 한 건만 표시되는지 확인합니다.
+5. 아래의 인증된 CSV 명령으로 테스트 참가자의 연락처와 두 `2026-09-08` 동의 버전을 확인합니다. 테스트 DB만 사용하는 것을 확인한 뒤 아래 전체 삭제 명령을 실행하고, 리더보드가 비며 CSV에 헤더만 남는지 확인합니다.
+
 프로덕션은 빌드 후 실행합니다.
 
 ```bash

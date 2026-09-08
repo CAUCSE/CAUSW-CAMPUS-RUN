@@ -22,18 +22,24 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const app = Fastify({
     bodyLimit: 16 * 1024,
     trustProxy: trustProxyHops(options.config.trustProxy),
+    disableRequestLogging: true,
+    requestIdHeader: false,
     logger: {
       level: 'info',
-      redact: {
-        paths: [
-          'req.headers.authorization',
-          'req.body',
-          "res.headers['set-cookie']",
-        ],
-        remove: true,
-      },
+      base: null,
+      timestamp: false,
       ...(options.logStream === undefined ? {} : { stream: options.logStream }),
     },
+  })
+
+  app.addHook('onResponse', async (request, reply) => {
+    // Never serialize request/reply objects or use raw URLs as a route fallback.
+    app.log.info({
+      reqId: request.id,
+      route: request.routeOptions.url ?? 'unknown',
+      statusCode: reply.statusCode,
+      durationMs: reply.elapsedTime,
+    })
   })
 
   app.addHook('onRequest', async (request) => {

@@ -1,15 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { z } from 'zod'
 import type { ServerConfig } from '../config.js'
 import type { SessionRecordRepository } from '../database/repositories.js'
-import { HttpError } from '../http/errors.js'
 import { SlidingWindowRateLimiter } from '../http/rate-limit.js'
-import { dailyIpHash } from '../security/identity.js'
+import { ipRateLimit } from '../http/ip-rate-limit.js'
 
 const SUCCESS_MESSAGE = 'Request completed successfully.'
-const LeaderboardQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(50).optional(),
-}).strict()
 
 interface LeaderboardRoutesOptions {
   readonly config: ServerConfig
@@ -19,15 +14,12 @@ interface LeaderboardRoutesOptions {
 }
 
 export function registerLeaderboardRoutes(app: FastifyInstance, options: LeaderboardRoutesOptions): void {
-  app.get('/api/v2/campus-typing/leaderboard', async (request) => {
+  app.get('/api/v2/campus-typing/leaderboard', {
+    onRequest: ipRateLimit(options, 'leaderboard:ip', 120),
+  }, async () => {
     const nowMs = options.now()
-    const ipHash = dailyIpHash(request.ip, nowMs, options.config.studentHmacKey)
-    if (!options.rateLimiter.check('leaderboard:ip', ipHash, 120, nowMs)) {
-      throw new HttpError(429, 'TYPING_RATE_LIMITED', 'Too many requests. Please try again later.')
-    }
-
-    const { limit = 10 } = LeaderboardQuerySchema.parse(request.query)
-    const entries = options.repository.getLeaderboard(limit).map((record) => ({
+    // This endpoint always exposes the same top ten; query parameters are ignored.
+    const entries = options.repository.getLeaderboard(10).map((record) => ({
       rank: record.rank,
       nickname: record.nickname,
       officialElapsedMilliseconds: record.officialElapsedMilliseconds,

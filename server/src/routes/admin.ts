@@ -7,7 +7,7 @@ import { HttpError } from '../http/errors.js'
 import { SlidingWindowRateLimiter } from '../http/rate-limit.js'
 import { decryptContact } from '../security/contact-encryption.js'
 import { hasValidAdminBearerToken } from '../security/admin-auth.js'
-import { dailyIpHash } from '../security/identity.js'
+import { ipRateLimit } from '../http/ip-rate-limit.js'
 
 const SUCCESS_MESSAGE = 'Request completed successfully.'
 const ADMIN_LIMIT_PER_MINUTE = 10
@@ -26,12 +26,6 @@ interface AdminRoutesOptions {
 function requireAdmin(request: FastifyRequest, options: AdminRoutesOptions): void {
   if (!hasValidAdminBearerToken(request.headers.authorization, options.config.adminToken)) {
     throw new HttpError(401, 'TYPING_ADMIN_UNAUTHORIZED', 'Administrator authentication is required.')
-  }
-
-  const nowMs = options.now()
-  const ipHash = dailyIpHash(request.ip, nowMs, options.config.studentHmacKey)
-  if (!options.rateLimiter.check('admin:ip', ipHash, ADMIN_LIMIT_PER_MINUTE, nowMs)) {
-    throw new HttpError(429, 'TYPING_RATE_LIMITED', 'Too many requests. Please try again later.')
   }
 }
 
@@ -52,8 +46,11 @@ function toWinnerRow(record: ReturnType<SessionRecordRepository['getBestRecordsW
 }
 
 export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions): void {
-  app.get('/api/v2/admin/campus-typing/records.csv', async (request, reply) => {
-    requireAdmin(request, options)
+  const onRequest = [
+    ipRateLimit(options, 'admin:ip', ADMIN_LIMIT_PER_MINUTE),
+    async (request: FastifyRequest) => { requireAdmin(request, options) },
+  ]
+  app.get('/api/v2/admin/campus-typing/records.csv', { onRequest }, async (_request, reply) => {
     const rows = options.repository.getBestRecordsWithContacts().map((record) => toWinnerRow(record, options.config))
 
     reply
@@ -65,8 +62,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     return reply.send(toWinnerCsv(rows))
   })
 
-  app.delete('/api/v2/admin/campus-typing/records', async (request) => {
-    requireAdmin(request, options)
+  app.delete('/api/v2/admin/campus-typing/records', { onRequest }, async (request) => {
     DeleteAllDataSchema.parse(request.body)
     const deleted = options.repository.deleteAllData()
 

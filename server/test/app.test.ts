@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
-import { buildApp } from '../src/app.js'
+import { buildApp, type AppOptions } from '../src/app.js'
 import type { ServerConfig } from '../src/config.js'
 import { runMigrations } from '../src/database/migrations.js'
 import { createRepository } from '../src/database/repositories.js'
@@ -20,12 +20,13 @@ const config: ServerConfig = {
 
 const apps: { app: ReturnType<typeof buildApp>; db: Database.Database }[] = []
 
-function createApp(overrides: Partial<ServerConfig> = {}) {
+function createApp(overrides: Partial<ServerConfig> = {}, logStream?: AppOptions['logStream']) {
   const db = new Database(':memory:')
   runMigrations(db, fileURLToPath(new URL('../migrations/', import.meta.url)))
   const app = buildApp({
     config: { ...config, ...overrides },
     repository: createRepository(db),
+    ...(logStream === undefined ? {} : { logStream }),
   })
   apps.push({ app, db })
   return app
@@ -39,6 +40,47 @@ afterEach(async () => {
 })
 
 describe('Fastify application boundary', () => {
+  test('logs only generated request ID, route template, status and duration for adversarial requests', async () => {
+    const chunks: string[] = []
+    const app = createApp({}, { write(message) { chunks.push(message) } })
+    app.get('/internal-error', async () => { throw new Error('private-error@example.com') })
+    app.get('/cookie-response', async (_request, reply) => reply.header('set-cookie', 'private-response-cookie').send({ ok: true }))
+    const headers = {
+      host: 'private-host.example',
+      authorization: 'Bearer private-admin-token',
+      cookie: 'session=private-cookie',
+      'x-request-id': 'private-request-id',
+    }
+    const requests = [
+      { method: 'GET' as const, url: '/health?email=private-query@example.com&studentNumber=20249999', route: '/health', status: 200 },
+      { method: 'GET' as const, url: '/private-path@example.com', route: 'unknown', status: 404 },
+      { method: 'POST' as const, url: '/api/v2/campus-typing/sessions/private-session-id/completion', payload: { reportedElapsedMilliseconds: 5000, typoCount: 0 }, route: '/api/v2/campus-typing/sessions/:sessionId/completion', status: 404 },
+      { method: 'POST' as const, url: '/api/v2/campus-typing/sessions', payload: { email: 'private-body@example.com', phoneNumber: '01087654321' }, route: '/api/v2/campus-typing/sessions', status: 400 },
+      { method: 'GET' as const, url: '/api/v2/admin/campus-typing/records.csv', route: '/api/v2/admin/campus-typing/records.csv', status: 401 },
+      { method: 'GET' as const, url: '/internal-error', route: '/internal-error', status: 500 },
+      { method: 'GET' as const, url: '/cookie-response', route: '/cookie-response', status: 200 },
+      ...Array.from({ length: 9 }, () => ({ method: 'GET' as const, url: '/api/v2/admin/campus-typing/records.csv?email=private-rate@example.com', route: '/api/v2/admin/campus-typing/records.csv', status: 401 })),
+      { method: 'GET' as const, url: '/api/v2/admin/campus-typing/records.csv?email=private-rate@example.com', route: '/api/v2/admin/campus-typing/records.csv', status: 429 },
+    ]
+    for (const { route: _route, status, ...request } of requests) {
+      expect((await app.inject({ ...request, headers, remoteAddress: '203.0.113.55' })).statusCode).toBe(status)
+    }
+    expect((await app.inject({ method: 'POST', url: '/api/v2/campus-typing/sessions', headers: { ...headers, 'content-type': 'application/private-content-type' }, payload: 'private-parser-body' })).statusCode).toBe(400)
+    const logs = chunks.join('')
+    for (const secret of ['private-', '20249999', '01087654321', '203.0.113.55']) expect(logs).not.toContain(secret)
+    const events = logs.trim().split('\n').map((line) => JSON.parse(line))
+    expect(events).toHaveLength(requests.length + 1)
+    for (const [index, event] of events.entries()) {
+      expect(Object.keys(event).sort()).toEqual(['durationMs', 'level', 'reqId', 'route', 'statusCode'])
+      expect(event.reqId).toEqual(expect.any(String))
+      expect(event.reqId.length).toBeGreaterThan(0)
+      expect(event.durationMs).toBeGreaterThanOrEqual(0)
+      expect(event.route).toBe(requests[index]?.route ?? '/api/v2/campus-typing/sessions')
+      expect(event.statusCode).toBe(requests[index]?.status ?? 400)
+    }
+    expect(new Set(events.map((event) => event.reqId)).size).toBe(events.length)
+  })
+
   test('allows configured origins and rejects an unconfigured origin', async () => {
     const app = createApp()
 

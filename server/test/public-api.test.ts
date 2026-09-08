@@ -272,6 +272,13 @@ describe('public campus typing API', () => {
     expect(leaderboard.json().data.entries).toHaveLength(10)
     expect(leaderboard.json().data.entries.filter((entry: { nickname: string }) => entry.nickname === '빠름')).toHaveLength(0)
 
+    // No client query can expand or shrink the fixed public top ten.
+    for (const query of ['limit=50', 'limit=1', 'limit=0', 'limit=-1', 'limit=garbage', 'limit=10&limit=50', 'private=value']) {
+      const queried = await app.inject({ method: 'GET', url: `${leaderboardUrl}?${query}` })
+      expect(queried.statusCode).toBe(200)
+      expect(queried.json().data.entries).toEqual(leaderboard.json().data.entries)
+    }
+
     const exactRankSession = await createSession(app, { studentNumber: '20249999', nickname: '현재' }, '198.51.100.99')
     advance(30_000)
     const completion = await app.inject({
@@ -343,5 +350,34 @@ describe('public campus typing API', () => {
     })
     expect(completionLimited.statusCode).toBe(429)
     expect(completionLimited.json()).toMatchObject({ code: 'TYPING_RATE_LIMITED', data: null })
+  })
+
+  test.each([
+    ['session creation', sessionsUrl, 10],
+    ['session completion', `${sessionsUrl}/missing-session/completion`, 30],
+  ])('counts invalid bodies and parser failures toward the %s IP limit', async (_name, url, limit) => {
+    const { app, db, advance } = createApp()
+    const invalidRequests = [
+      { payload: {} },
+      { headers: { 'content-type': 'application/json' }, payload: '{"email":' },
+      { headers: { 'content-type': 'application/xml' }, payload: '<private />' },
+      { payload: { padding: 'x'.repeat(16 * 1024) } },
+    ]
+    for (let index = 0; index < limit; index += 1) {
+      const response = await app.inject({ method: 'POST', url, ...invalidRequests[index % invalidRequests.length] })
+      expect(response.statusCode).toBe(400)
+    }
+    for (const invalid of invalidRequests) {
+      const response = await app.inject({ method: 'POST', url, ...invalid })
+      expect(response.statusCode).toBe(429)
+      expect(response.json()).toMatchObject({ code: 'TYPING_RATE_LIMITED', data: null })
+    }
+    expect((await app.inject({ method: 'POST', url, payload: {}, remoteAddress: '198.51.100.99' })).statusCode).toBe(400)
+    advance(59_999)
+    expect((await app.inject({ method: 'POST', url, payload: {} })).statusCode).toBe(429)
+    advance(1)
+    expect((await app.inject({ method: 'POST', url, payload: {} })).statusCode).toBe(400)
+    expect(db.prepare('SELECT count(*) AS count FROM game_sessions').get()).toEqual({ count: 0 })
+    expect(db.prepare('SELECT count(*) AS count FROM game_records').get()).toEqual({ count: 0 })
   })
 })
