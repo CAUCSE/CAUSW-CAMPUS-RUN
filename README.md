@@ -68,8 +68,8 @@ npm --prefix server start
 SQLite 파일은 서비스가 중지된 상태에서 보관하거나 SQLite의 일관된 백업 기능으로 복제합니다. 예를 들어 SQLite CLI가 설치된 운영 환경에서는 다음처럼 백업합니다.
 
 ```bash
-mkdir -p backups
-sqlite3 data/cau-typing.sqlite ".backup 'backups/cau-typing-$(date +%F).sqlite'"
+mkdir -p server/backups
+sqlite3 server/data/cau-typing.sqlite ".backup 'server/backups/cau-typing-$(date +%F).sqlite'"
 ```
 
 백업은 암호화된 접근 제한 저장소에 보관하고, 복구 절차를 정기적으로 시험합니다. 보관 기간은 대회 목적·학내 정책·동의 고지에 맞춰 정한 뒤, 만료 시 아래 전체 삭제 절차를 사용합니다. 현재 API에는 자동 보존 정책이나 선택적 삭제 기능이 없으므로, 필요한 기간이 끝나면 운영자가 백업 여부를 확인하고 수동으로 파기해야 합니다.

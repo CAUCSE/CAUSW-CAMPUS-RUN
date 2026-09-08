@@ -143,3 +143,21 @@ test('opens an in-memory database when WAL is unavailable', () => {
     db.close()
   }
 })
+
+test('closes a partially opened database when initialization fails', () => {
+  let closeCalls = 0
+  const initializationFailure = new Error('WAL initialization failed')
+  const partialDatabase = {
+    pragma(command: string) {
+      if (command === 'journal_mode = WAL') throw initializationFailure
+      return undefined
+    },
+    close() {
+      closeCalls += 1
+    },
+  }
+
+  expect(() => openDatabase(':memory:', () => partialDatabase as never))
+    .toThrow(initializationFailure)
+  expect(closeCalls).toBe(1)
+})
