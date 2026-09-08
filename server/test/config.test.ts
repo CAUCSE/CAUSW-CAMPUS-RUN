@@ -4,7 +4,7 @@ const validEnv = {
   PORT: '3001',
   HOST: '127.0.0.1',
   DATABASE_PATH: '/tmp/cau-typing.sqlite',
-  ALLOWED_ORIGINS: 'https://typing.example, https://admin.example',
+  ALLOWED_ORIGINS: 'http://localhost:5173, https://typing.example',
   STUDENT_NUMBER_HMAC_KEY: 'student-hmac-key-with-at-least-32-bytes',
   EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   ADMIN_TOKEN: 'admin-token-with-at-least-32-bytes!',
@@ -19,7 +19,7 @@ test('loads validated server configuration', async () => {
     port: 3001,
     trustProxy: 0,
     databasePath: '/tmp/cau-typing.sqlite',
-    allowedOrigins: ['https://typing.example', 'https://admin.example'],
+    allowedOrigins: ['http://localhost:5173', 'https://typing.example'],
   })
 })
 
@@ -39,4 +39,15 @@ test('rejects HMAC and administrator secrets shorter than 32 UTF-8 bytes', async
     .toThrow('STUDENT_NUMBER_HMAC_KEY')
   expect(() => loadConfig({ ...validEnv, ADMIN_TOKEN: 'too-short' }))
     .toThrow('ADMIN_TOKEN')
+})
+
+test.each([
+  '*',
+  'not-an-origin',
+  'https://typing.example/path',
+])('rejects a wildcard or non-Origin ALLOWED_ORIGINS value: %s', async (allowedOrigins) => {
+  const { loadConfig } = await import('../src/config.js')
+
+  expect(() => loadConfig({ ...validEnv, ALLOWED_ORIGINS: allowedOrigins }))
+    .toThrow('ALLOWED_ORIGINS')
 })

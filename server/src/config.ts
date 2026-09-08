@@ -38,6 +38,15 @@ const emailEncryptionKeySchema = z.string()
   })
   .transform((value) => Buffer.from(value, 'base64'))
 
+function isExactHttpOrigin(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.origin === value
+  } catch {
+    return false
+  }
+}
+
 const configSchema = z.object({
   HOST: z.string().trim().min(1).default('127.0.0.1'),
   PORT: portSchema,
@@ -46,8 +55,8 @@ const configSchema = z.object({
     .trim()
     .min(1)
     .transform((value) => value.split(',').map((origin) => origin.trim()))
-    .refine((origins) => origins.every((origin) => origin.length > 0), {
-      message: 'ALLOWED_ORIGINS must not contain empty origins',
+    .refine((origins) => origins.every(isExactHttpOrigin), {
+      message: 'ALLOWED_ORIGINS entries must be exact HTTP(S) origins',
     }),
   STUDENT_NUMBER_HMAC_KEY: secretSchema('STUDENT_NUMBER_HMAC_KEY'),
   EMAIL_ENCRYPTION_KEY: emailEncryptionKeySchema,
