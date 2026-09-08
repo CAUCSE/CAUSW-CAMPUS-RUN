@@ -3,7 +3,6 @@ import helmet from '@fastify/helmet'
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { ServerConfig } from './config.js'
 import type { SessionRecordRepository } from './database/repositories.js'
-import { CreateSessionInputSchema } from './validation.js'
 import { HttpError, toErrorEnvelope } from './http/errors.js'
 import { SlidingWindowRateLimiter } from './http/rate-limit.js'
 
@@ -64,16 +63,6 @@ export function buildApp(options: AppOptions): FastifyInstance {
     message: 'Request completed successfully.',
     data: { status: 'ok' },
   }))
-
-  // This guard establishes the public input boundary. Task 6 owns session persistence.
-  app.post('/api/v2/campus-typing/sessions', async (request, reply) => {
-    CreateSessionInputSchema.parse(request.body)
-    reply.code(404).send({
-      code: 'TYPING_SESSION_NOT_FOUND',
-      message: 'The session endpoint is not available.',
-      data: null,
-    })
-  })
 
   return app
 }

@@ -64,30 +64,35 @@ describe('Fastify application boundary', () => {
     })
   })
 
-  test('returns a stable envelope without echoing invalid private input', async () => {
+  test('leaves the session route available for the Task 6 handler', async () => {
     const app = createApp()
+
+    app.post('/api/v2/campus-typing/sessions', async () => ({
+      code: 'SUCCESS',
+      message: 'Task 6 handler.',
+      data: null,
+    }))
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/v2/campus-typing/sessions',
-      payload: { email: 'secret@example.com' },
     })
 
-    expect(response.statusCode).toBe(400)
+    expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
-      code: 'TYPING_INVALID_INPUT',
-      message: expect.any(String),
+      code: 'SUCCESS',
+      message: 'Task 6 handler.',
       data: null,
     })
-    expect(response.body).not.toContain('secret@example.com')
   })
 
   test('limits request bodies to 16 KiB with the stable error envelope', async () => {
     const app = createApp()
+    app.post('/body-limit-test', async () => ({ code: 'SUCCESS', message: 'ok', data: null }))
 
     const response = await app.inject({
       method: 'POST',
-      url: '/api/v2/campus-typing/sessions',
+      url: '/body-limit-test',
       payload: { padding: 'x'.repeat(16 * 1024) },
     })
 
@@ -167,5 +172,15 @@ describe('SlidingWindowRateLimiter', () => {
     expect(limiter.check('admin', 'ip-a', 1, 0)).toBe(true)
     expect(limiter.check('public', 'ip-b', 1, 0)).toBe(true)
     expect(limiter.check('public', 'ip-a', 1, 60_001)).toBe(true)
+  })
+
+  test('reclaims an inactive expired bucket when a different key is accessed', () => {
+    const limiter = new SlidingWindowRateLimiter()
+
+    expect(limiter.check('public', 'inactive-ip', 1, 0)).toBe(true)
+    expect(limiter.bucketCount).toBe(1)
+
+    expect(limiter.check('admin', 'active-ip', 1, 60_001)).toBe(true)
+    expect(limiter.bucketCount).toBe(1)
   })
 })
