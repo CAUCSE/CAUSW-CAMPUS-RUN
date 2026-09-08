@@ -18,6 +18,14 @@ function assertEncryptionKey(key: Buffer): void {
   }
 }
 
+function decodeEncryptionMetadata(value: string, expectedLength: number): Buffer {
+  const decoded = Buffer.from(value, 'base64')
+  if (decoded.length !== expectedLength || decoded.toString('base64') !== value) {
+    throw new Error('Invalid encrypted contact')
+  }
+  return decoded
+}
+
 export function encryptContact(
   value: string,
   sessionId: string,
@@ -27,7 +35,7 @@ export function encryptContact(
   assertEncryptionKey(key)
 
   const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: 16 })
   cipher.setAAD(authenticatedData(sessionId, field))
   const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
 
@@ -46,9 +54,11 @@ export function decryptContact(
 ): string {
   assertEncryptionKey(key)
 
-  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(encrypted.iv, 'base64'))
+  const iv = decodeEncryptionMetadata(encrypted.iv, 12)
+  const authTag = decodeEncryptionMetadata(encrypted.authTag, 16)
+  const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 })
   decipher.setAAD(authenticatedData(sessionId, field))
-  decipher.setAuthTag(Buffer.from(encrypted.authTag, 'base64'))
+  decipher.setAuthTag(authTag)
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(encrypted.ciphertext, 'base64')),
     decipher.final(),

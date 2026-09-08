@@ -48,3 +48,15 @@ test('rejects a contact whose authenticated tag was altered without echoing its 
   expect(() => decryptContact(altered, 'session-1', 'email', encryptionKey))
     .not.toThrowError(/person@example\.com/)
 })
+
+test('rejects truncated and non-16-byte GCM authentication tags', () => {
+  const encrypted = encryptContact('01012345678', 'session-1', 'phone', encryptionKey)
+  const tag = Buffer.from(encrypted.authTag, 'base64')
+
+  for (const invalidTag of [tag.subarray(0, 12), tag.subarray(0, 15), Buffer.concat([tag, Buffer.from([0])])]) {
+    expect(() => decryptContact({
+      ...encrypted,
+      authTag: invalidTag.toString('base64'),
+    }, 'session-1', 'phone', encryptionKey)).toThrow()
+  }
+})
