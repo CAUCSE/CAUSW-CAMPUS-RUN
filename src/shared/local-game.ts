@@ -2,9 +2,10 @@ import { CAMPUS_COURSE } from './course'
 import type { CompleteSessionRequest, CompletionResponse, CreateSessionResponse } from './types'
 
 const LOCAL_SESSION_DURATION_MS = 10 * 60 * 1_000
+const COUNTDOWN_MS = 3_000
 
 export function createLocalGameSession(): CreateSessionResponse {
-  const startedAt = new Date()
+  const startedAt = new Date(Date.now() + COUNTDOWN_MS)
   return {
     sessionId: `local-${crypto.randomUUID()}`,
     course: [...CAMPUS_COURSE],

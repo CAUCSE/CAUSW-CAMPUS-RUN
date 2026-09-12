@@ -8,7 +8,7 @@ vi.mock('../shared/game-session', () => ({ readActiveGame: mocks.readActiveGame,
 vi.mock('../shared/api', () => ({ completeGameSession: mocks.completeGameSession }))
 vi.mock('../shared/local-game', () => ({ completeLocalGame: mocks.completeLocalGame }))
 
-const game = { sessionId: 'session-1', nickname: '청룡', course: ['본관', '중앙도서관'], startedAtEpochMs: 1_000, expiresAtEpochMs: 60_000, typoCount: 0 }
+const game = { sessionId: 'session-1', nickname: '청룡', course: ['본관', '중앙도서관'], startedAtEpochMs: 4_000, expiresAtEpochMs: 604_000, typoCount: 0 }
 
 describe('PlayPage submitted attempts', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000); vi.clearAllMocks(); mocks.readActiveGame.mockReturnValue(game) })
@@ -49,19 +49,19 @@ describe('PlayPage submitted attempts', () => {
 
     expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
     fireEvent.change(input, { target: { value: '본' } })
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^60타\/분$/)
     fireEvent.change(input, { target: { value: '본브' } })
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^60타\/분$/)
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
 
     fireEvent.change(input, { target: { value: '본관' } })
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^40타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^140타\/분$/)
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^40타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^140타\/분$/)
 
     act(() => vi.advanceTimersByTime(3_000))
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^70타\/분$/)
   })
 
   test('starts typing speed at zero when resuming saved progress', () => {
@@ -70,7 +70,7 @@ describe('PlayPage submitted attempts', () => {
 
     expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^0타\/분$/)
     fireEvent.change(screen.getByLabelText('장소 입력'), { target: { value: '중' } })
-    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^20타\/분$/)
+    expect(screen.getByLabelText('현재 타수')).toHaveTextContent(/^60타\/분$/)
   })
 
   test('keeps the mute choice for the next game', () => {
@@ -78,5 +78,24 @@ describe('PlayPage submitted attempts', () => {
     fireEvent.click(screen.getByRole('button', { name: '효과음 끄기' }))
     expect(localStorage.getItem('cau-typing-sound-muted')).toBe('true')
     expect(screen.getByRole('button', { name: '효과음 켜기' })).toBeInTheDocument()
+  })
+
+  test('freezes the displayed and submitted time at the final Enter press', () => {
+    mocks.readActiveGame.mockReturnValue({ ...game, course: ['본관'] })
+    mocks.completeGameSession.mockReturnValue(new Promise(() => {}))
+    render(<PlayPage />); start()
+    act(() => vi.advanceTimersByTime(5_000))
+
+    const input = screen.getByLabelText('장소 입력')
+    fireEvent.change(input, { target: { value: '본관' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(mocks.completeGameSession).toHaveBeenCalledWith('session-1', {
+      reportedElapsedMilliseconds: 5_000,
+      typoCount: 0,
+    })
+    expect(screen.getByText('00:05.00')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(3_000))
+    expect(screen.getByText('00:05.00')).toBeInTheDocument()
   })
 })

@@ -11,7 +11,8 @@ const validEnv = {
   ALLOWED_ORIGINS: 'http://localhost:5173',
   STUDENT_NUMBER_HMAC_KEY: 'student-hmac-key-with-at-least-32-bytes',
   EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
-  ADMIN_TOKEN: 'admin-token-with-at-least-32-bytes!',
+  ADMIN_EMAIL: 'admin@example.com',
+  ADMIN_PASSWORD: 'admin-password-with-at-least-32-bytes!',
   TRUST_PROXY: '0',
 }
 

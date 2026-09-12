@@ -7,7 +7,8 @@ export interface ServerConfig {
   readonly allowedOrigins: readonly string[]
   readonly studentHmacKey: string
   readonly emailEncryptionKey: Buffer
-  readonly adminToken: string
+  readonly adminEmail: string
+  readonly adminPassword: string
   readonly trustProxy: number
 }
 
@@ -60,7 +61,8 @@ const configSchema = z.object({
     }),
   STUDENT_NUMBER_HMAC_KEY: secretSchema('STUDENT_NUMBER_HMAC_KEY'),
   EMAIL_ENCRYPTION_KEY: emailEncryptionKeySchema,
-  ADMIN_TOKEN: secretSchema('ADMIN_TOKEN'),
+  ADMIN_EMAIL: z.email('ADMIN_EMAIL must be a valid email address'),
+  ADMIN_PASSWORD: secretSchema('ADMIN_PASSWORD'),
   TRUST_PROXY: trustProxySchema,
 })
 
@@ -74,7 +76,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     allowedOrigins: value.ALLOWED_ORIGINS,
     studentHmacKey: value.STUDENT_NUMBER_HMAC_KEY,
     emailEncryptionKey: value.EMAIL_ENCRYPTION_KEY,
-    adminToken: value.ADMIN_TOKEN,
+    adminEmail: value.ADMIN_EMAIL,
+    adminPassword: value.ADMIN_PASSWORD,
     trustProxy: value.TRUST_PROXY,
   }
 }

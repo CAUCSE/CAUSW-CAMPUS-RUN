@@ -34,7 +34,7 @@ npm run build
 
 ## Deployment
 
-배포 서버는 `index.html`, `play.html`, `result.html`을 각각 독립적인 파일로 제공해야 합니다. 필요하다면 CAUSW 백엔드로 향하는 요청을 프록시하여 CORS를 처리하세요.
+배포 서버는 `index.html`, `play.html`, `result.html`, `admin/index.html`을 각각 제공해야 합니다. `/admin` 요청은 `/admin/`으로 리다이렉트하거나 같은 파일을 제공하도록 설정합니다. 필요하다면 CAUSW 백엔드로 향하는 요청을 프록시하여 CORS를 처리하세요.
 
 ## Standalone leaderboard server
 
@@ -45,7 +45,7 @@ cp server/.env.example server/.env
 # server/.env의 placeholder를 아래에서 생성한 값으로 모두 교체
 openssl rand -base64 32 # EMAIL_ENCRYPTION_KEY
 openssl rand -hex 32    # STUDENT_NUMBER_HMAC_KEY
-openssl rand -hex 32    # ADMIN_TOKEN
+openssl rand -hex 32    # ADMIN_PASSWORD
 npm --prefix server install
 npm --prefix server run dev
 ```
@@ -58,10 +58,16 @@ VITE_TYPING_GAME_API_BASE_URL=http://127.0.0.1:3001
 VITE_TYPING_GAME_DEBUG=false
 ```
 
-`server/.env`는 `HOST=127.0.0.1`, `PORT=3001`, `ALLOWED_ORIGINS=http://localhost:5173`으로 설정합니다(`server/.env.example`과 동일). 별도 터미널에서 아래 명령을 실행하고 정확히 `http://localhost:5173`으로 접속합니다.
+`server/.env`는 `HOST=127.0.0.1`, `PORT=3001`, `ALLOWED_ORIGINS=http://localhost:5173`으로 설정합니다(`server/.env.example`과 동일). `ADMIN_EMAIL`에는 관리자 이메일을, `ADMIN_PASSWORD`에는 32바이트 이상의 강한 비밀번호를 설정합니다. 별도 터미널에서 아래 명령을 실행하고 정확히 `http://localhost:5173`으로 접속합니다.
 
 ```bash
 npm run dev -- --host localhost --port 5173 --strictPort
+```
+
+백엔드와 프론트를 한 터미널에서 함께 실행하려면 다음 스크립트를 사용합니다. `Ctrl-C`를 누르거나 한 프로세스가 종료되면 나머지 프로세스도 함께 종료됩니다.
+
+```bash
+./scripts/dev.sh
 ```
 
 브라우저 주소가 `http://127.0.0.1:5173`이면 다른 Origin입니다. 이 주소를 사용할 경우 Vite의 `--host`를 `127.0.0.1`로 바꾸고 `ALLOWED_ORIGINS`에도 해당 Origin을 명시합니다. 두 주소를 모두 허용하려면 `http://localhost:5173,http://127.0.0.1:5173`으로 설정합니다. 서버 환경변수 변경 후에는 서버를 재시작하고, `VITE_` 변경 후에는 Vite를 재시작합니다. 빌드한 프론트에는 환경변수가 빌드 시 반영되므로 다시 빌드·배포해야 합니다.
@@ -83,7 +89,7 @@ npm --prefix server start
 
 `server/.env`와 실제 비밀값은 저장소·CSV·티켓·채팅에 넣지 않습니다. `ALLOWED_ORIGINS`에는 와일드카드가 아닌 정확한 브라우저 Origin만 쉼표로 구분해 설정합니다. `PORT=0`은 OS가 사용 가능한 포트를 선택하게 하므로 테스트나 운영 플랫폼의 동적 포트 할당에 사용할 수 있습니다.
 
-운영 시작 전 아래 설정을 확인합니다. `ALLOWED_ORIGINS`, `STUDENT_NUMBER_HMAC_KEY`, `EMAIL_ENCRYPTION_KEY`, `ADMIN_TOKEN`은 반드시 설정해야 합니다. 나머지는 기본값을 명시적으로 덮어쓸 때만 설정합니다.
+운영 시작 전 아래 설정을 확인합니다. `ALLOWED_ORIGINS`, `STUDENT_NUMBER_HMAC_KEY`, `EMAIL_ENCRYPTION_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`는 반드시 설정해야 합니다. 나머지는 기본값을 명시적으로 덮어쓸 때만 설정합니다.
 
 | 변수 | 필요 여부 | 기본값 / 제약 |
 | --- | --- | --- |
@@ -93,7 +99,8 @@ npm --prefix server start
 | `ALLOWED_ORIGINS` | 필수 | 쉼표 구분 정확한 HTTP(S) Origin |
 | `STUDENT_NUMBER_HMAC_KEY` | 필수 | UTF-8 32바이트 이상 |
 | `EMAIL_ENCRYPTION_KEY` | 필수 | Base64로 표현한 정확히 32바이트 AES 키 |
-| `ADMIN_TOKEN` | 필수 | UTF-8 32바이트 이상 Bearer 토큰 |
+| `ADMIN_EMAIL` | 필수 | 관리자 로그인에 사용할 올바른 이메일 주소 |
+| `ADMIN_PASSWORD` | 필수 | UTF-8 32바이트 이상의 관리자 비밀번호 |
 | `TRUST_PROXY` | 선택 | `0`; 검토된 프록시 홉 수만 설정 |
 
 ### Public internet and reverse proxy
@@ -140,17 +147,19 @@ curl --fail http://127.0.0.1:3001/health
 sqlite3 server/data/cau-typing.sqlite 'SELECT count(*) AS sessions FROM game_sessions; SELECT count(*) AS records FROM game_records;'
 ```
 
-CSV 내보내기와 전체 삭제는 `ADMIN_TOKEN` Bearer 인증이 필요하며, CSV에는 연락처 정보가 포함됩니다. 토큰은 셸의 안전한 환경변수나 비밀 관리자에서만 주입하고, 다운로드 파일도 접근 제한·암호화·보관 기한을 적용합니다.
+브라우저에서 `/admin/`으로 접속해 `ADMIN_EMAIL`, `ADMIN_PASSWORD`로 로그인하면 CSV 내보내기와 전체 초기화를 사용할 수 있습니다. 로그인 정보는 브라우저 저장소에 보관되지 않아 페이지를 새로고침하면 다시 로그인해야 합니다. CSV에는 연락처 정보가 포함되므로 다운로드 파일에도 접근 제한·암호화·보관 기한을 적용합니다.
+
+터미널에서 호출할 때는 Basic 인증을 사용합니다. 셸 기록에 비밀번호를 직접 남기지 않도록 안전한 비밀 주입 방식을 사용합니다.
 
 ```bash
-curl -H "Authorization: Bearer $ADMIN_TOKEN" http://127.0.0.1:3001/api/v2/admin/campus-typing/records.csv --output campus-typing-records.csv
+curl --user "$ADMIN_EMAIL:$ADMIN_PASSWORD" http://127.0.0.1:3001/api/v2/admin/campus-typing/records.csv --output campus-typing-records.csv
 
-curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+curl -X DELETE --user "$ADMIN_EMAIL:$ADMIN_PASSWORD" -H "Content-Type: application/json" \
   --data '{"confirmation":"DELETE ALL CAMPUS TYPING DATA"}' \
   http://127.0.0.1:3001/api/v2/admin/campus-typing/records
 ```
 
-두 번째 요청은 되돌릴 수 없는 전체 파기입니다. 실행 전 검증된 백업과 승인 절차를 확인하고, `ADMIN_TOKEN`은 명령 기록에 남기지 않도록 안전한 비밀 주입 방식으로 설정합니다.
+두 번째 요청은 되돌릴 수 없는 전체 파기입니다. 실행 전 검증된 백업과 승인 절차를 확인하고, 관리자 비밀번호는 명령 기록에 남기지 않도록 안전한 비밀 주입 방식으로 설정합니다.
 
 ### 개인정보 및 발송 대행 주의
 

@@ -14,7 +14,9 @@ const sessionsUrl = '/api/v2/campus-typing/sessions'
 const leaderboardUrl = '/api/v2/campus-typing/leaderboard'
 const csvUrl = '/api/v2/admin/campus-typing/records.csv'
 const deleteUrl = '/api/v2/admin/campus-typing/records'
-const adminToken = 'admin-token-with-at-least-32-bytes!'
+const adminEmail = 'admin@example.com'
+const adminPassword = 'admin-password-with-at-least-32-bytes!'
+const adminAuthorization = `Basic ${Buffer.from(`${adminEmail}:${adminPassword}`).toString('base64')}`
 
 const config: ServerConfig = {
   host: '127.0.0.1',
@@ -23,7 +25,8 @@ const config: ServerConfig = {
   allowedOrigins: ['https://typing.example'],
   studentHmacKey: 'student-hmac-key-with-at-least-32-bytes',
   emailEncryptionKey: Buffer.alloc(32, 7),
-  adminToken,
+  adminEmail,
+  adminPassword,
   trustProxy: 0,
 }
 
@@ -111,7 +114,7 @@ describe('standalone leaderboard server full flow', () => {
       expect(sqliteContents).not.toContain(privateValue)
     }
 
-    for (const authorization of [undefined, 'Bearer wrong-admin-token']) {
+    for (const authorization of [undefined, 'Basic wrong-admin-credentials']) {
       const unauthorizedCsv = await app.inject({
         method: 'GET',
         url: csvUrl,
@@ -124,7 +127,7 @@ describe('standalone leaderboard server full flow', () => {
     const unauthorizedDelete = await app.inject({
       method: 'DELETE',
       url: deleteUrl,
-      headers: { authorization: 'Bearer wrong-admin-token' },
+      headers: { authorization: 'Basic wrong-admin-credentials' },
       payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' },
     })
     expect(unauthorizedDelete.statusCode).toBe(401)
@@ -134,7 +137,7 @@ describe('standalone leaderboard server full flow', () => {
     const csvResponse = await app.inject({
       method: 'GET',
       url: csvUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
     })
     expect(csvResponse.statusCode).toBe(200)
     expect(csvResponse.body).toContain('winner@example.com')
@@ -145,7 +148,7 @@ describe('standalone leaderboard server full flow', () => {
     const rejectedDelete = await app.inject({
       method: 'DELETE',
       url: deleteUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
       payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA ' },
     })
     expect(rejectedDelete.statusCode).toBe(400)
@@ -153,7 +156,7 @@ describe('standalone leaderboard server full flow', () => {
     const deleted = await app.inject({
       method: 'DELETE',
       url: deleteUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
       payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' },
     })
     expect(deleted.statusCode).toBe(200)
@@ -181,7 +184,8 @@ describe('standalone leaderboard server full flow', () => {
       '01012345678',
       '01087654321',
       '01011112222',
-      adminToken,
+      adminEmail,
+      adminPassword,
     ]) {
       expect(logOutput).not.toContain(privateValue)
     }

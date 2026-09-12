@@ -15,7 +15,8 @@ const config: ServerConfig = {
   allowedOrigins: ['https://typing.example'],
   studentHmacKey: 'student-hmac-key-with-at-least-32-bytes',
   emailEncryptionKey: Buffer.alloc(32, 7),
-  adminToken: 'admin-token-with-at-least-32-bytes!',
+  adminEmail: 'admin@example.com',
+  adminPassword: 'admin-password-with-at-least-32-bytes!',
   trustProxy: 0,
 }
 
@@ -81,8 +82,8 @@ describe('public campus typing API', () => {
       data: {
         sessionId: expect.any(String),
         course: CAMPUS_COURSE,
-        startedAt: '2023-11-14T22:13:20.000Z',
-        expiresAt: '2023-11-14T22:23:20.000Z',
+        startedAt: '2023-11-14T22:13:23.000Z',
+        expiresAt: '2023-11-14T22:23:23.000Z',
       },
     })
     expect(created.body).not.toContain('Winner@Example.com')
@@ -111,7 +112,7 @@ describe('public campus typing API', () => {
       course_json: JSON.stringify(CAMPUS_COURSE),
     })
 
-    advance(18_000)
+    advance(21_000)
     const completed = await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${created.json().data.sessionId}/completion`,
@@ -137,7 +138,7 @@ describe('public campus typing API', () => {
       message: expect.any(String),
       data: {
         entries: [{ rank: 1, nickname: '청룡', officialElapsedMilliseconds: 18_000, typoCount: 1 }],
-        updatedAt: '2023-11-14T22:13:38.000Z',
+        updatedAt: '2023-11-14T22:13:41.000Z',
       },
     })
     expect(leaderboard.body).not.toMatch(/studentHash|email|phone|consent|20240001/i)
@@ -199,7 +200,7 @@ describe('public campus typing API', () => {
   test('uses server time for plausibility, expiration, and replay protection', async () => {
     const { app, advance } = createApp()
     const tooFast = await createSession(app)
-    advance(4_999)
+    advance(7_999)
     const tooFastCompletion = await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${tooFast.json().data.sessionId}/completion`,
@@ -209,7 +210,7 @@ describe('public campus typing API', () => {
     expect(tooFastCompletion.json()).toMatchObject({ code: 'TYPING_INVALID_DURATION', data: null })
 
     const valid = await createSession(app, { studentNumber: '20240002' })
-    advance(5_000)
+    advance(8_000)
     const completed = await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${valid.json().data.sessionId}/completion`,
@@ -227,7 +228,7 @@ describe('public campus typing API', () => {
     expect(replay.json()).toMatchObject({ code: 'TYPING_SESSION_COMPLETED', data: null })
 
     const expired = await createSession(app, { studentNumber: '20240003' })
-    advance(600_001)
+    advance(603_001)
     const expiredCompletion = await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${expired.json().data.sessionId}/completion`,
@@ -240,14 +241,14 @@ describe('public campus typing API', () => {
   test('shows one best record per normalized HMAC identity and returns the exact current rank', async () => {
     const { app, advance } = createApp()
     const first = await createSession(app, { studentNumber: '20240001', nickname: '느림' })
-    advance(20_000)
+    advance(23_000)
     await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${first.json().data.sessionId}/completion`,
       payload: { reportedElapsedMilliseconds: 20_000, typoCount: 0 },
     })
     const second = await createSession(app, { studentNumber: '2024 0001', nickname: '빠름' })
-    advance(18_000)
+    advance(21_000)
     await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${second.json().data.sessionId}/completion`,
@@ -259,7 +260,7 @@ describe('public campus typing API', () => {
         studentNumber: `20241${String(index).padStart(3, '0')}`,
         nickname: `선수${index}`,
       }, `198.51.100.${index}`)
-      advance(5_000 + index)
+      advance(8_000 + index)
       await app.inject({
         method: 'POST',
         url: `${sessionsUrl}/${created.json().data.sessionId}/completion`,
@@ -280,7 +281,7 @@ describe('public campus typing API', () => {
     }
 
     const exactRankSession = await createSession(app, { studentNumber: '20249999', nickname: '현재' }, '198.51.100.99')
-    advance(30_000)
+    advance(33_000)
     const completion = await app.inject({
       method: 'POST',
       url: `${sessionsUrl}/${exactRankSession.json().data.sessionId}/completion`,
@@ -333,7 +334,7 @@ describe('public campus typing API', () => {
       expect(created.statusCode).toBe(200)
       sessionIds.push(created.json().data.sessionId)
     }
-    completion.advance(5_000)
+    completion.advance(8_000)
     for (const sessionId of sessionIds.slice(0, 30)) {
       expect((await completion.app.inject({
         method: 'POST',

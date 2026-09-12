@@ -7,7 +7,8 @@ const validEnv = {
   ALLOWED_ORIGINS: 'http://localhost:5173, https://typing.example',
   STUDENT_NUMBER_HMAC_KEY: 'student-hmac-key-with-at-least-32-bytes',
   EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
-  ADMIN_TOKEN: 'admin-token-with-at-least-32-bytes!',
+  ADMIN_EMAIL: 'admin@example.com',
+  ADMIN_PASSWORD: 'admin-password-with-at-least-32-bytes!',
   TRUST_PROXY: '0',
 }
 
@@ -32,13 +33,20 @@ test('rejects an encryption key that is not 32 decoded bytes', async () => {
   })).toThrow('EMAIL_ENCRYPTION_KEY')
 })
 
-test('rejects HMAC and administrator secrets shorter than 32 UTF-8 bytes', async () => {
+test('rejects HMAC and administrator passwords shorter than 32 UTF-8 bytes', async () => {
   const { loadConfig } = await import('../src/config.js')
 
   expect(() => loadConfig({ ...validEnv, STUDENT_NUMBER_HMAC_KEY: 'too-short' }))
     .toThrow('STUDENT_NUMBER_HMAC_KEY')
-  expect(() => loadConfig({ ...validEnv, ADMIN_TOKEN: 'too-short' }))
-    .toThrow('ADMIN_TOKEN')
+  expect(() => loadConfig({ ...validEnv, ADMIN_PASSWORD: 'too-short' }))
+    .toThrow('ADMIN_PASSWORD')
+})
+
+test('rejects an invalid administrator email', async () => {
+  const { loadConfig } = await import('../src/config.js')
+
+  expect(() => loadConfig({ ...validEnv, ADMIN_EMAIL: 'not-an-email' }))
+    .toThrow('ADMIN_EMAIL')
 })
 
 test.each([

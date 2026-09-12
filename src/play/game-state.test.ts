@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { calculateTypingSpeed, createGameState, isCourseComplete, setCurrentInput, submitCurrentInput } from './game-state'
+import { calculateTypingSpeed, countTypingStrokes, createGameState, isCourseComplete, setCurrentInput, submitCurrentInput } from './game-state'
 
 describe('submitted-attempt game state', () => {
   test('keeps a draft unchanged until it is submitted', () => {
@@ -27,13 +27,13 @@ describe('submitted-attempt game state', () => {
     expect(isCourseComplete(result.state)).toBe(true)
   })
 
-  test('starts at zero and stabilizes the first correct character at 20 typing speed', () => {
+  test('starts at zero and measures the first correct syllable by its strokes', () => {
     const empty = createGameState(['본관'])
     const oneCorrectCharacter = setCurrentInput(empty, '본')
 
     expect(calculateTypingSpeed(empty, 0)).toBe(0)
-    expect(calculateTypingSpeed(oneCorrectCharacter, 0)).toBe(20)
-    expect(calculateTypingSpeed(oneCorrectCharacter, 120_000)).toBe(20)
+    expect(calculateTypingSpeed(oneCorrectCharacter, 0)).toBe(60)
+    expect(calculateTypingSpeed(oneCorrectCharacter, 120_000)).toBe(2)
   })
 
   test('caps typing speed at 700', () => {
@@ -41,5 +41,17 @@ describe('submitted-attempt game state', () => {
     const state = setCurrentInput(createGameState([target]), target)
 
     expect(calculateTypingSpeed(state, 3_000)).toBe(700)
+  })
+
+  test('counts Korean syllables as two-set keyboard strokes', () => {
+    expect(countTypingStrokes('값')).toBe(4)
+    expect(countTypingStrokes('과')).toBe(3)
+    expect(countTypingStrokes('A 1')).toBe(3)
+  })
+
+  test('calculates typing speed from Korean keyboard strokes instead of completed syllables', () => {
+    const state = setCurrentInput(createGameState(['값']), '값')
+
+    expect(calculateTypingSpeed(state, 60_000)).toBe(4)
   })
 })

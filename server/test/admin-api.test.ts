@@ -13,7 +13,10 @@ import { encryptContact } from '../src/security/contact-encryption.js'
 
 const csvUrl = '/api/v2/admin/campus-typing/records.csv'
 const deleteUrl = '/api/v2/admin/campus-typing/records'
-const adminToken = 'admin-token-with-at-least-32-bytes!'
+const authUrl = '/api/v2/admin/campus-typing/auth'
+const adminEmail = 'admin@example.com'
+const adminPassword = 'admin-password-with-at-least-32-bytes!'
+const adminAuthorization = `Basic ${Buffer.from(`${adminEmail}:${adminPassword}`).toString('base64')}`
 const config: ServerConfig = {
   host: '127.0.0.1',
   port: 0,
@@ -21,7 +24,8 @@ const config: ServerConfig = {
   allowedOrigins: ['https://typing.example'],
   studentHmacKey: 'student-hmac-key-with-at-least-32-bytes',
   emailEncryptionKey: Buffer.alloc(32, 7),
-  adminToken,
+  adminEmail,
+  adminPassword,
   trustProxy: 0,
 }
 
@@ -77,6 +81,23 @@ afterEach(async () => {
 })
 
 describe('admin records API', () => {
+  test('verifies administrator credentials without reading or changing records', async () => {
+    const { app, repository } = createApp()
+    seedWinningRecord(repository)
+
+    const authorized = await app.inject({
+      method: 'GET',
+      url: authUrl,
+      headers: { authorization: adminAuthorization },
+    })
+    const unauthorized = await app.inject({ method: 'GET', url: authUrl })
+
+    expect(authorized.statusCode).toBe(200)
+    expect(authorized.json()).toMatchObject({ code: 'SUCCESS', data: { authenticated: true } })
+    expect(unauthorized.statusCode).toBe(401)
+    expect(repository.getLeaderboard(10)).toHaveLength(1)
+  })
+
   test('escapes formula-leading and delimiter-containing CSV cells', () => {
     for (const value of ['=1+1', '+1', '-1', '@name', '\tformula']) {
       expect(escapeCsvCell(value)).toBe(`'${value}`)
@@ -94,7 +115,7 @@ describe('admin records API', () => {
     const response = await app.inject({
       method: 'GET',
       url: csvUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
     })
 
     expect(response.statusCode).toBe(200)
@@ -107,12 +128,18 @@ describe('admin records API', () => {
     expect(response.body).toContain('2026-09-08')
   })
 
-  test('rejects missing, malformed, and wrong tokens before attempting to decrypt contacts', async () => {
+  test('rejects missing, malformed, and wrong credentials before attempting to decrypt contacts', async () => {
     const { app, repository, db } = createApp()
     seedWinningRecord(repository)
     db.prepare("UPDATE game_sessions SET email_ciphertext = 'not-valid-ciphertext'").run()
 
-    for (const authorization of [undefined, 'Basic credentials', 'Bearer', 'Bearer wrong-token', `Bearer ${adminToken} extra`]) {
+    for (const authorization of [
+      undefined,
+      'Basic credentials',
+      'Bearer old-token',
+      `Basic ${Buffer.from(`wrong@example.com:${adminPassword}`).toString('base64')}`,
+      `Basic ${Buffer.from(`${adminEmail}:wrong-password`).toString('base64')}`,
+    ]) {
       const response = await app.inject({
         method: 'GET',
         url: csvUrl,
@@ -147,7 +174,7 @@ describe('admin records API', () => {
     const response = await app.inject({
       method: 'GET',
       url: csvUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
     })
 
     expect(response.body).toContain("'=sum(1,1)")
@@ -167,7 +194,7 @@ describe('admin records API', () => {
     const response = await app.inject({
       method: 'DELETE',
       url: deleteUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
       payload: { confirmation: 'DELETE' },
     })
 
@@ -175,11 +202,11 @@ describe('admin records API', () => {
     expect(repository.getLeaderboard(10)).toHaveLength(1)
   })
 
-  test('cannot delete with a missing or wrong token even with exact confirmation', async () => {
+  test('cannot delete with missing or wrong credentials even with exact confirmation', async () => {
     const { app, repository } = createApp()
     seedWinningRecord(repository)
 
-    for (const authorization of [undefined, 'Bearer wrong-token']) {
+    for (const authorization of [undefined, `Basic ${Buffer.from(`${adminEmail}:wrong-password`).toString('base64')}`]) {
       const response = await app.inject({
         method: 'DELETE',
         url: deleteUrl,
@@ -198,13 +225,13 @@ describe('admin records API', () => {
     const deleted = await app.inject({
       method: 'DELETE',
       url: deleteUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
       payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' },
     })
     const csv = await app.inject({
       method: 'GET',
       url: csvUrl,
-      headers: { authorization: `Bearer ${adminToken}` },
+      headers: { authorization: adminAuthorization },
     })
 
     expect(deleted.statusCode).toBe(200)
@@ -219,7 +246,7 @@ describe('admin records API', () => {
   test('limits authenticated admin requests to ten per minute', async () => {
     let now = Date.UTC(2026, 8, 8, 12, 0, 0)
     const { app } = createApp(() => now)
-    const headers = { authorization: `Bearer ${adminToken}` }
+    const headers = { authorization: adminAuthorization }
 
     for (let index = 0; index < 10; index += 1) {
       expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(200)
@@ -230,7 +257,7 @@ describe('admin records API', () => {
     expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(200)
   })
 
-  test.each([undefined, 'Bearer wrong-token'])('counts unauthenticated requests (%s) across both admin routes before database work', async (authorization) => {
+  test.each([undefined, 'Basic wrong-credentials'])('counts unauthenticated requests (%s) across both admin routes before database work', async (authorization) => {
     let now = Date.UTC(2026, 8, 8, 12)
     const { app, db, repository } = createApp(() => now)
     seedWinningRecord(repository)
@@ -246,7 +273,7 @@ describe('admin records API', () => {
     // Closing the DB makes accidental reads/decrypt/delete observable as 500.
     db.close()
     expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(429)
-    expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers: { authorization: `Bearer ${adminToken}` }, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })).statusCode).toBe(429)
+    expect((await app.inject({ method: 'DELETE', url: deleteUrl, headers: { authorization: adminAuthorization }, payload: { confirmation: 'DELETE ALL CAMPUS TYPING DATA' } })).statusCode).toBe(429)
     now += 59_999
     expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(429)
     now += 1
@@ -257,7 +284,7 @@ describe('admin records API', () => {
   test('shares the admin limit across authenticated CSV, invalid confirmation and parser failures', async () => {
     const { app, repository } = createApp()
     seedWinningRecord(repository)
-    const headers = { authorization: `Bearer ${adminToken}` }
+    const headers = { authorization: adminAuthorization }
     for (let index = 0; index < 2; index += 1) {
       expect((await app.inject({ method: 'GET', url: csvUrl, headers })).statusCode).toBe(200)
       for (const invalid of [

@@ -11,6 +11,7 @@ export default defineConfig({
         lobby: resolve(__dirname, 'index.html'),
         play: resolve(__dirname, 'play.html'),
         result: resolve(__dirname, 'result.html'),
+        admin: resolve(__dirname, 'admin/index.html'),
       },
     },
   },

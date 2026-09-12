@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react'
 
-export function useCountdown() {
-  const [remaining, setRemaining] = useState(3)
+export function useCountdown(startsAtEpochMs: number) {
+  const [now, setNow] = useState(Date.now)
+  const remaining = Math.max(0, Math.ceil((startsAtEpochMs - now) / 1_000))
+
   useEffect(() => {
-    if (remaining === 0) return
-    const timer = window.setTimeout(() => setRemaining((value) => value - 1), 1_000)
+    setNow(Date.now())
+    const millisecondsUntilStart = startsAtEpochMs - Date.now()
+    if (millisecondsUntilStart <= 0) return
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(1_000, millisecondsUntilStart),
+    )
     return () => window.clearTimeout(timer)
-  }, [remaining])
-  return { remaining, isPlaying: remaining === 0 }
+  }, [now, startsAtEpochMs])
+
+  return { remaining, isPlaying: now >= startsAtEpochMs }
 }

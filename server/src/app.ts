@@ -53,6 +53,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     origin(origin, callback) {
       callback(null, origin === undefined || allowedOrigins.has(origin))
     },
+    methods: ['GET', 'HEAD', 'POST', 'DELETE'],
   })
   app.register(helmet)
 

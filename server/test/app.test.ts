@@ -14,7 +14,8 @@ const config: ServerConfig = {
   allowedOrigins: ['https://typing.example'],
   studentHmacKey: 'student-hmac-key-with-at-least-32-bytes',
   emailEncryptionKey: Buffer.alloc(32, 7),
-  adminToken: 'admin-token-with-at-least-32-bytes!',
+  adminEmail: 'admin@example.com',
+  adminPassword: 'admin-password-with-at-least-32-bytes!',
   trustProxy: 0,
 }
 
@@ -104,6 +105,26 @@ describe('Fastify application boundary', () => {
       message: expect.any(String),
       data: null,
     })
+  })
+
+  test('allows the administrator delete request through the browser CORS preflight', async () => {
+    const app = createApp()
+
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v2/admin/campus-typing/records',
+      headers: {
+        origin: 'https://typing.example',
+        'access-control-request-method': 'DELETE',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    })
+
+    expect(response.statusCode).toBe(204)
+    expect(response.headers['access-control-allow-origin']).toBe('https://typing.example')
+    expect(response.headers['access-control-allow-methods']).toContain('DELETE')
+    expect(response.headers['access-control-allow-headers']).toContain('authorization')
+    expect(response.headers['access-control-allow-headers']).toContain('content-type')
   })
 
   test('reserves the public session route for its validation handler', async () => {

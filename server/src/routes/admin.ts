@@ -6,7 +6,7 @@ import type { SessionRecordRepository } from '../database/repositories.js'
 import { HttpError } from '../http/errors.js'
 import { SlidingWindowRateLimiter } from '../http/rate-limit.js'
 import { decryptContact } from '../security/contact-encryption.js'
-import { hasValidAdminBearerToken } from '../security/admin-auth.js'
+import { hasValidAdminBasicCredentials } from '../security/admin-auth.js'
 import { ipRateLimit } from '../http/ip-rate-limit.js'
 
 const SUCCESS_MESSAGE = 'Request completed successfully.'
@@ -24,7 +24,11 @@ interface AdminRoutesOptions {
 }
 
 function requireAdmin(request: FastifyRequest, options: AdminRoutesOptions): void {
-  if (!hasValidAdminBearerToken(request.headers.authorization, options.config.adminToken)) {
+  if (!hasValidAdminBasicCredentials(
+    request.headers.authorization,
+    options.config.adminEmail,
+    options.config.adminPassword,
+  )) {
     throw new HttpError(401, 'TYPING_ADMIN_UNAUTHORIZED', 'Administrator authentication is required.')
   }
 }
@@ -50,6 +54,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOp
     ipRateLimit(options, 'admin:ip', ADMIN_LIMIT_PER_MINUTE),
     async (request: FastifyRequest) => { requireAdmin(request, options) },
   ]
+  app.get('/api/v2/admin/campus-typing/auth', { onRequest }, async () => ({
+    code: 'SUCCESS',
+    message: SUCCESS_MESSAGE,
+    data: { authenticated: true },
+  }))
+
   app.get('/api/v2/admin/campus-typing/records.csv', { onRequest }, async (_request, reply) => {
     const rows = options.repository.getBestRecordsWithContacts().map((record) => toWinnerRow(record, options.config))
 

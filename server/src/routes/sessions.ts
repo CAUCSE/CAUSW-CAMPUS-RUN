@@ -12,6 +12,7 @@ import { dailyIpHash, studentHash } from '../security/identity.js'
 import { CompleteSessionInputSchema, CreateSessionInputSchema } from '../validation.js'
 
 const SESSION_TTL_MS = 600_000
+const COUNTDOWN_MS = 3_000
 const SUCCESS_MESSAGE = 'Request completed successfully.'
 
 interface SessionRoutesOptions {
@@ -45,7 +46,8 @@ export function registerSessionRoutes(app: FastifyInstance, options: SessionRout
     rejectWhenLimited(options.rateLimiter, 'session:create:student', normalizedStudentHash, 3, nowMs)
 
     const sessionId = randomUUID()
-    const expiresAtMs = nowMs + SESSION_TTL_MS
+    const startedAtMs = nowMs + COUNTDOWN_MS
+    const expiresAtMs = startedAtMs + SESSION_TTL_MS
     options.repository.createSession({
       id: sessionId,
       studentHash: normalizedStudentHash,
@@ -56,7 +58,7 @@ export function registerSessionRoutes(app: FastifyInstance, options: SessionRout
       thirdPartyConsentVersion: THIRD_PARTY_CONSENT_VERSION,
       consentedAtMs: nowMs,
       course: CAMPUS_COURSE,
-      startedAtMs: nowMs,
+      startedAtMs,
       expiresAtMs,
       createdIpHash: ipHash,
     })
@@ -67,7 +69,7 @@ export function registerSessionRoutes(app: FastifyInstance, options: SessionRout
       data: {
         sessionId,
         course: CAMPUS_COURSE,
-        startedAt: new Date(nowMs).toISOString(),
+        startedAt: new Date(startedAtMs).toISOString(),
         expiresAt: new Date(expiresAtMs).toISOString(),
       },
     }
